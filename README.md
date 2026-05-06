@@ -12,6 +12,19 @@
 
 ---
 
+> 🤝 **A note to enthusiasts.** kernelradar is being built in the open
+> by one person and a small circle of contributors. If you run
+> small-fleet infrastructure, do Linux security for a living, write
+> Rust or BPF C — or simply believe that Linux observability shouldn't
+> require a SaaS subscription — your help is welcome. File a bug, send
+> a `pull request`, write documentation, port a detector, package the
+> tool for your distro, or just star the repository so others can find
+> it. The roadmap below is a direction, not a fence: if you have a
+> real-world scenario that needs a different detector, open an `issue`
+> and let's talk.
+
+---
+
 ## What is this — and why does it exist?
 
 `kernelradar` watches a Linux box from inside the kernel via eBPF and flags
@@ -24,26 +37,26 @@ It lives in the same category as the open-source tools **Falco**, **Tetragon**,
 **Tracee**, and the commercial endpoint-detection products like **SentinelOne**,
 **CrowdStrike Falcon**, **Sysdig Secure**.
 
-What makes `kernelradar` different:
+What makes it different:
 
-- **Adaptive baseline + sigma-based anomaly scoring.** It learns what "normal"
-  looks like for each individual host (per-detector, per-process, per-hour-of-day
-  EWMA model) and flags statistical deviations — not just static rule matches.
-  The free peers are rule-based; this is closer to commercial EDR baselining.
-- **One Rust binary, ~80 MB resident, no Kubernetes.** Drop it on the server,
-  point it at journald, walk away. No SaaS dashboard. No cloud account. No
-  per-host subscription.
-- **Honest about what it doesn't do.** No web UI. No fleet manager. No threat-
-  intel feed. No automated remediation in the default install. Pair it with the
-  observability stack you already run (journald, Prometheus, Loki, Vector,
-  Wazuh, Slack, Telegram, anything Falco-compatible) — recipes are in
+- **Adaptive baseline + sigma-based anomaly scoring.** It learns what
+  "normal" looks like on each individual host (an EWMA model — per
+  detector, per process, per hour of the day) and flags statistical
+  deviations, not just static rule matches.
+- **One binary, ~80 MB resident memory.**
+  Drop it on the server, point it at journald, walk away.
+- **About what's not (yet) here.** No web UI. No centralized
+  management. No threat-intelligence integration. No automated
+  remediation in the default install. Pair it with the observability
+  stack you already run (journald, Prometheus, Loki, Vector, Wazuh,
+  Slack, Telegram, any Falco-compatible SIEM) — recipes are in
   [`docs/integrations/`](docs/integrations/).
 
-**Built for the DevOps engineer or sysadmin running 5–50 servers** whose budget
-skips enterprise EDR subscriptions but who still wants to know — in real time
-— when something on a production box runs `setuid(0)`, loads an unsigned
-kernel module, opens `/etc/shadow`, or phones home from a process you don't
-recognize.
+**Built for the DevOps engineer or sysadmin running 5–50 servers** whose
+budget can't stretch to enterprise EDR subscriptions but who still wants
+to know in real time when something on a production box runs `setuid(0)`,
+loads an unsigned kernel module, opens `/etc/shadow`, or makes outbound
+connections from an unfamiliar process.
 
 > ⚠️ **Status: v0.1.0-preview.** All eight detectors are implemented and tested
 > on a real host (Debian 12, kernel 6.13). Performance and reliability numbers
@@ -264,8 +277,8 @@ of the larger CNCF tools. If they're acceptable trade-offs, read on.
 
 ## Roadmap 2026
 
-This is a single-maintainer project working at a conservative cadence. Each
-quarter takes 1–2 minor versions; targets are realistic, not aspirational.
+This is a single-maintainer project at a conservative cadence. One
+quarter — one or two minor versions.
 
 ### Q2 2026 — v0.1.x patch series
 
@@ -390,6 +403,20 @@ figure it out from there.
 > один Rust-бинарник, без Kubernetes, без SaaS, без телеметрии наружу.
 
 🇬🇧 [English](#kernelradar) · 🇷🇺 **Русский**
+
+---
+
+> 🤝 **Энтузиастам.** kernelradar разрабатывается открыто — одним
+> человеком и небольшим кругом участников. Если ты держишь
+> инфраструктуру небольшого парка серверов, профессионально занимаешься
+> безопасностью Linux, пишешь на Rust или BPF C — или просто убеждён,
+> что наблюдаемость Linux не должна требовать SaaS-подписки — твоя
+> помощь нужна. Заведи баг, пришли `pull request`, напиши
+> документацию, портируй детектор, собери пакет под свой дистрибутив
+> или просто поставь репозиторию звезду, чтобы другие его нашли.
+> Дорожная карта ниже — это направление, а не забор: если у тебя есть
+> реальный сценарий, требующий другого детектора, — открой `issue`,
+> обсудим.
 
 ---
 
