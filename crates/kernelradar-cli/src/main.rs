@@ -7,6 +7,12 @@ use kernelradar_detectors::{
     privesc::PrivEscDetector,
 };
 
+// Default allowlist covers container runtimes + module management + us
+const DEFAULT_ALLOW: &str =
+    "runc,containerd,dockerd,podman,crio,\
+     modprobe,kmod,insmod,\
+     bpftrace,falco,kernelradar";
+
 #[derive(Parser)]
 #[command(name = "kernelradar")]
 #[command(about = "Behavioral anomaly detection for the Linux kernel")]
@@ -15,17 +21,21 @@ struct Cli {
     #[arg(long, default_value = "/etc/kernelradar/config.toml")]
     config: String,
 
+    /// Output alerts as JSON (one object per line)
+    #[arg(long, global = true)]
+    json: bool,
+
     #[command(subcommand)]
     command: Commands,
 }
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Run all detectors concurrently (daemon mode)
+    /// Run all detectors concurrently
     Daemon {
         #[arg(long, default_value = "crates/kernelradar-bpf/.output")]
         bpf_dir: String,
-        #[arg(long, default_value = "bpftrace,falco,kernelradar,modprobe,kmod,insmod")]
+        #[arg(long, default_value = DEFAULT_ALLOW)]
         allow: String,
     },
 
@@ -35,7 +45,7 @@ enum Commands {
         detector: String,
         #[arg(long, default_value = "crates/kernelradar-bpf/.output")]
         bpf_dir: String,
-        #[arg(long, default_value = "bpftrace,falco,kernelradar,modprobe,kmod,insmod")]
+        #[arg(long, default_value = DEFAULT_ALLOW)]
         allow: String,
     },
 
@@ -53,37 +63,38 @@ async fn main() -> Result<()> {
         .init();
 
     let cli = Cli::parse();
+    let json = cli.json;
 
     match cli.command {
         Commands::Daemon { bpf_dir, allow } => {
-            run_daemon(&bpf_dir, &allow).await?;
+            run_daemon(&bpf_dir, &allow, json).await?;
         }
-
         Commands::Detect { detector, bpf_dir, allow } => {
-            let allowlist = parse_allow(&allow);
+            let al = parse_allow(&allow);
             match detector.as_str() {
                 "privesc" => {
-                    PrivEscDetector::new(
-                        &format!("{bpf_dir}/privesc.bpf.o")
-                    ).run().await?;
+                    let mut d = PrivEscDetector::new(
+                        &format!("{bpf_dir}/privesc.bpf.o"));
+                    d.json = json;
+                    d.run().await?;
                 }
                 "bpf-loader" => {
-                    BpfLoaderDetector::new(
-                        &format!("{bpf_dir}/bpf_loader.bpf.o"),
-                        allowlist,
-                    ).run().await?;
+                    let mut d = BpfLoaderDetector::new(
+                        &format!("{bpf_dir}/bpf_loader.bpf.o"), al);
+                    d.json = json;
+                    d.run().await?;
                 }
                 "container" => {
-                    ContainerDetector::new(
-                        &format!("{bpf_dir}/container.bpf.o"),
-                        allowlist,
-                    ).run().await?;
+                    let mut d = ContainerDetector::new(
+                        &format!("{bpf_dir}/container.bpf.o"), al);
+                    d.json = json;
+                    d.run().await?;
                 }
                 "kmod" => {
-                    KmodDetector::new(
-                        &format!("{bpf_dir}/kmod.bpf.o"),
-                        allowlist,
-                    ).run().await?;
+                    let mut d = KmodDetector::new(
+                        &format!("{bpf_dir}/kmod.bpf.o"), al);
+                    d.json = json;
+                    d.run().await?;
                 }
                 other => {
                     eprintln!("Unknown detector: {other}");
@@ -92,81 +103,59 @@ async fn main() -> Result<()> {
                 }
             }
         }
-
         Commands::Status => {
             println!("kernelradar {}", env!("CARGO_PKG_VERSION"));
             println!("Detectors:");
-            println!("  [1] privesc     ✅ Phase 1");
-            println!("  [2] bpf-loader  ✅ Phase 1");
-            println!("  [3] container   ✅ Phase 2");
-            println!("  [4] kmod        ✅ Phase 2");
+            println!("  [1] privesc     ✅");
+            println!("  [2] bpf-loader  ✅");
+            println!("  [3] container   ✅");
+            println!("  [4] kmod        ✅");
         }
     }
-
     Ok(())
 }
 
-fn parse_allow(allow: &str) -> Vec<String> {
-    allow.split(',').map(|s| s.trim().to_string()).collect()
+fn parse_allow(s: &str) -> Vec<String> {
+    s.split(',').map(|e| e.trim().to_string()).collect()
 }
 
-async fn run_daemon(bpf_dir: &str, allow: &str) -> Result<()> {
-    let allowlist = parse_allow(allow);
-    println!("kernelradar daemon starting — all 4 detectors");
-    println!("BPF dir:   {bpf_dir}");
-    println!("Allowlist: {allow}");
-    println!("Press Ctrl+C to stop all.\n");
-
-    // Spawn all 4 detectors as independent tokio tasks.
-    // Each task owns its Ebpf instance; all auto-unload on drop.
-    let d1 = {
-        let obj = format!("{bpf_dir}/privesc.bpf.o");
-        tokio::spawn(async move {
-            if let Err(e) = PrivEscDetector::new(&obj).run().await {
-                tracing::error!("privesc: {e}");
-            }
-        })
-    };
-
-    let d2 = {
-        let obj = format!("{bpf_dir}/bpf_loader.bpf.o");
-        let al  = allowlist.clone();
-        tokio::spawn(async move {
-            if let Err(e) = BpfLoaderDetector::new(&obj, al).run().await {
-                tracing::error!("bpf-loader: {e}");
-            }
-        })
-    };
-
-    let d3 = {
-        let obj = format!("{bpf_dir}/container.bpf.o");
-        let al  = allowlist.clone();
-        tokio::spawn(async move {
-            if let Err(e) = ContainerDetector::new(&obj, al).run().await {
-                tracing::error!("container: {e}");
-            }
-        })
-    };
-
-    let d4 = {
-        let obj = format!("{bpf_dir}/kmod.bpf.o");
-        let al  = allowlist.clone();
-        tokio::spawn(async move {
-            if let Err(e) = KmodDetector::new(&obj, al).run().await {
-                tracing::error!("kmod: {e}");
-            }
-        })
-    };
-
-    // Wait for any task to finish (Ctrl+C propagates via signal::ctrl_c
-    // inside each detector's run loop)
-    tokio::select! {
-        _ = d1 => {}
-        _ = d2 => {}
-        _ = d3 => {}
-        _ = d4 => {}
+async fn run_daemon(bpf_dir: &str, allow: &str, json: bool) -> Result<()> {
+    let al = parse_allow(allow);
+    if !json {
+        println!("kernelradar {}", env!("CARGO_PKG_VERSION"));
+        println!("daemon mode — 4 detectors active");
+        println!("Allowlist: {allow}");
+        println!("Press Ctrl+C to stop.\n");
     }
 
-    println!("\nkernelradar daemon stopped.");
+    let d1 = { let o = format!("{bpf_dir}/privesc.bpf.o");
+        tokio::spawn(async move {
+            let mut d = PrivEscDetector::new(&o); d.json = json;
+            if let Err(e) = d.run().await { tracing::error!("privesc: {e}"); }
+        })
+    };
+    let d2 = { let (o, a) = (format!("{bpf_dir}/bpf_loader.bpf.o"), al.clone());
+        tokio::spawn(async move {
+            let mut d = BpfLoaderDetector::new(&o, a); d.json = json;
+            if let Err(e) = d.run().await { tracing::error!("bpf-loader: {e}"); }
+        })
+    };
+    let d3 = { let (o, a) = (format!("{bpf_dir}/container.bpf.o"), al.clone());
+        tokio::spawn(async move {
+            let mut d = ContainerDetector::new(&o, a); d.json = json;
+            if let Err(e) = d.run().await { tracing::error!("container: {e}"); }
+        })
+    };
+    let d4 = { let (o, a) = (format!("{bpf_dir}/kmod.bpf.o"), al.clone());
+        tokio::spawn(async move {
+            let mut d = KmodDetector::new(&o, a); d.json = json;
+            if let Err(e) = d.run().await { tracing::error!("kmod: {e}"); }
+        })
+    };
+
+    tokio::select! {
+        _ = d1 => {}  _ = d2 => {}  _ = d3 => {}  _ = d4 => {}
+    }
+    println!("\nkernelradar stopped.");
     Ok(())
 }
