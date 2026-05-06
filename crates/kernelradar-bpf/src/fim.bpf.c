@@ -14,6 +14,7 @@
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_tracing.h>
 #include "../include/events.h"
+#include "../include/stats.h"
 
 char LICENSE[] SEC("license") = "GPL";
 
@@ -71,11 +72,15 @@ int kr_tp_openat(struct trace_event_raw_sys_enter *ctx)
     if (!is_sensitive_prefix(path))
         return 0;
 
+    kr_stat_inc(KR_STAT_FIM_OBSERVED);
+
     /* Sensitive — emit full event */
     struct kr_event *e = bpf_ringbuf_reserve(&kr_fim_events,
                                               sizeof(*e), 0);
-    if (!e)
+    if (!e) {
+        kr_stat_inc(KR_STAT_FIM_DROPPED);
         return 0;
+    }
 
     __u64 id = bpf_get_current_pid_tgid();
     __u64 ug = bpf_get_current_uid_gid();

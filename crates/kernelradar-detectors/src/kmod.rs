@@ -32,8 +32,13 @@ impl KmodDetector {
         anyhow::ensure!(path.exists(), "BPF object not found: {}", self.bpf_obj_path);
 
         let bytes = std::fs::read(path)?;
-        verify_bpf("kmod", &bytes);
+        verify_bpf("kmod", &bytes)?;
         let mut bpf = Ebpf::load(&bytes).context("verifier rejected kmod BPF")?;
+
+        // H-3: pin kr_stats for external tooling.
+        if let Some(stats) = bpf.map_mut("kr_stats") {
+            let _ = stats.pin("/sys/fs/bpf/kr_stats_kmod");
+        }
 
         for (name, tp) in [
             ("kr_tp_finit_module", "sys_enter_finit_module"),

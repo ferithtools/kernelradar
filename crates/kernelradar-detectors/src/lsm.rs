@@ -23,6 +23,8 @@ use aya::{
 use std::path::Path;
 use std::sync::OnceLock;
 
+use crate::integrity::verify as verify_bpf;
+
 #[derive(Debug, Clone)]
 pub struct EnforcementConfig {
     pub selfprotect_enabled: bool,
@@ -129,8 +131,17 @@ pub fn install(cfg: &EnforcementConfig) {
     *cell.lock().expect("lsm mutex") = Some(state);
 }
 
-fn load_lsm(path: &str, btf: &Btf, prog_name: &'static str) -> Result<Ebpf> {
+/// Load an LSM program object file, verify its SHA-256 against the
+/// build-time hash, and attach the named LSM program. `detector` is
+/// the integrity-table key (must match `build.rs` name list);
+/// `prog_name` is the BPF program SEC name inside the object.
+fn load_lsm(path: &str, btf: &Btf, detector: &str, prog_name: &'static str) -> Result<Ebpf> {
     let bytes = std::fs::read(Path::new(path)).with_context(|| format!("read {path}"))?;
+
+    // H-2: LSM is the last line of defense. Integrity-check the BPF
+    // object before loading — same policy as the observation detectors.
+    verify_bpf(detector, &bytes)?;
+
     let mut bpf = Ebpf::load(&bytes).context("verifier rejected LSM program")?;
 
     let prog: &mut Lsm = bpf.program_mut(prog_name).context(prog_name)?.try_into()?;
@@ -140,7 +151,7 @@ fn load_lsm(path: &str, btf: &Btf, prog_name: &'static str) -> Result<Ebpf> {
 }
 
 fn load_selfprotect(path: &str, btf: &Btf) -> Result<Ebpf> {
-    let mut bpf = load_lsm(path, btf, "kr_task_kill")?;
+    let mut bpf = load_lsm(path, btf, "selfprotect", "kr_task_kill")?;
 
     // Populate the protected TGID with our own pid (since this process
     // is the BPF orchestrator, our tgid equals the daemon's tgid).
@@ -155,7 +166,7 @@ fn load_selfprotect(path: &str, btf: &Btf) -> Result<Ebpf> {
 }
 
 fn load_bpf_enforce(path: &str, btf: &Btf, allowlist: &[String]) -> Result<Ebpf> {
-    let mut bpf = load_lsm(path, btf, "kr_bpf_enforce")?;
+    let mut bpf = load_lsm(path, btf, "enforce_bpf", "kr_bpf_enforce")?;
 
     let map = bpf
         .take_map("kr_bpf_allowed")
@@ -172,7 +183,7 @@ fn load_bpf_enforce(path: &str, btf: &Btf, allowlist: &[String]) -> Result<Ebpf>
 }
 
 fn load_kmod_enforce(path: &str, btf: &Btf, allowlist: &[String]) -> Result<Ebpf> {
-    let mut bpf = load_lsm(path, btf, "kr_kmod_enforce")?;
+    let mut bpf = load_lsm(path, btf, "enforce_kmod", "kr_kmod_enforce")?;
 
     let map = bpf
         .take_map("kr_kmod_allowed")

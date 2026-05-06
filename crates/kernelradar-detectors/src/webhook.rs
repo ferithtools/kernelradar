@@ -86,17 +86,65 @@ pub fn submit(alert: &Alert) {
         if let Some(t) = auth {
             req = req.header(reqwest::header::AUTHORIZATION, format!("Bearer {t}"));
         }
+        let safe_url = sanitize_url(&url);
         match req.send().await {
             Ok(resp) if resp.status().is_success() => { /* ok */ }
             Ok(resp) => {
                 tracing::warn!(status = %resp.status(),
-                                url = %url,
+                                url = %safe_url,
                                 "webhook: non-2xx response");
             }
             Err(e) => {
-                tracing::warn!(error = %e, url = %url,
+                tracing::warn!(error = %e, url = %safe_url,
                                 "webhook: send failed");
             }
         }
     });
+}
+
+/// Strip path/query/fragment from a webhook URL for logging.
+/// Slack and Telegram embed bot tokens in the URL path; we must not
+/// leak them through journald / log aggregation. Returns just the
+/// scheme + host[:port], or "<malformed>" if the URL won't parse.
+fn sanitize_url(url: &str) -> String {
+    match reqwest::Url::parse(url) {
+        Ok(u) => {
+            let mut s = format!("{}://{}", u.scheme(), u.host_str().unwrap_or("?"));
+            if let Some(port) = u.port() {
+                s.push_str(&format!(":{port}"));
+            }
+            s
+        }
+        Err(_) => "<malformed>".to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sanitize_url_strips_slack_token() {
+        let s =
+            sanitize_url("https://hooks.slack.com/services/T0001/B0001/SECRET_TOKEN_PAYLOAD");
+        assert_eq!(s, "https://hooks.slack.com");
+    }
+
+    #[test]
+    fn sanitize_url_strips_telegram_bot_token() {
+        let s = sanitize_url("https://api.telegram.org/bot123456:ABCDEF_xyz/sendMessage");
+        assert_eq!(s, "https://api.telegram.org");
+    }
+
+    #[test]
+    fn sanitize_url_keeps_port() {
+        let s = sanitize_url("https://internal-relay.example.com:8443/hook?token=abc");
+        assert_eq!(s, "https://internal-relay.example.com:8443");
+    }
+
+    #[test]
+    fn sanitize_url_handles_malformed_input() {
+        assert_eq!(sanitize_url("not a url"), "<malformed>");
+        assert_eq!(sanitize_url(""), "<malformed>");
+    }
 }

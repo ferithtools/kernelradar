@@ -8,13 +8,40 @@
 ///
 /// At build time, build.rs computes SHA-256 of every .bpf.o file and
 /// embeds the digest in the binary. At load time we re-hash the file
-/// on disk; mismatch → loud warning + still load (we don't want a hash
-/// drift to hard-fail the daemon, but admins should see it immediately).
+/// on disk and compare.
+///
+/// Two modes (H-1):
+///   • Default — mismatch → loud `error!` log, daemon continues. Lets
+///     admins see drift immediately without breaking startup on the
+///     normal "I rebuilt the BPF objects after install" case.
+///   • Strict (`[integrity] strict_mode = true`) — mismatch returns
+///     an error, the detector that loaded this object refuses to
+///     start. Use when running shipped pre-built objects.
 ///
 /// Hashes are recomputed on every release build, so drift can only
 /// happen if `.bpf.o` files on disk diverge from what was shipped.
+use std::sync::atomic::{AtomicBool, Ordering};
 
 include!(concat!(env!("OUT_DIR"), "/bpf_hashes.rs"));
+
+/// Global strict-mode flag, set once from config at daemon startup.
+static STRICT_MODE: AtomicBool = AtomicBool::new(false);
+
+/// Switch to strict mode. After this call, any `verify()` mismatch
+/// returns Err instead of just logging.
+pub fn set_strict_mode(strict: bool) {
+    STRICT_MODE.store(strict, Ordering::Relaxed);
+}
+
+/// Returned by `verify` when a mismatch is detected and strict mode
+/// is on. Detectors propagate this via `?` to refuse to load.
+#[derive(Debug, thiserror::Error)]
+pub enum IntegrityError {
+    #[error("BPF integrity: {0} hash mismatch (strict mode); refusing to load")]
+    Mismatch(String),
+    #[error("BPF integrity: {0} has no build-time hash (strict mode); refusing to load")]
+    NoBuildHash(String),
+}
 
 /// Compute SHA-256 of a byte slice and return lowercase hex.
 pub fn sha256_hex(data: &[u8]) -> String {
@@ -36,10 +63,17 @@ pub fn expected_hash(name: &str) -> &'static str {
 }
 
 /// Verify a loaded BPF object's bytes against the build-time hash.
-/// Logs a warning on mismatch but does not fail.
-pub fn verify(detector: &str, bytes: &[u8]) {
+/// Returns Err only in strict mode (set via `set_strict_mode(true)`);
+/// the relaxed default logs but never blocks startup.
+///
+/// Backwards-compatible: in non-strict mode this function still has
+/// the side-effect-only logging behaviour the existing call sites
+/// expect, so `verify(...)` can be called without `?`. In strict
+/// mode call sites should propagate via `verify(...)?`.
+pub fn verify(detector: &str, bytes: &[u8]) -> Result<(), IntegrityError> {
     let actual = sha256_hex(bytes);
     let expected = expected_hash(detector);
+    let strict = STRICT_MODE.load(Ordering::Relaxed);
 
     if expected.is_empty() {
         tracing::warn!(
@@ -48,7 +82,10 @@ pub fn verify(detector: &str, bytes: &[u8]) {
             "BPF integrity: no build-time hash recorded \
              (BPF object missing during cargo build?)"
         );
-        return;
+        if strict {
+            return Err(IntegrityError::NoBuildHash(detector.to_string()));
+        }
+        return Ok(());
     }
 
     if actual != expected {
@@ -59,9 +96,13 @@ pub fn verify(detector: &str, bytes: &[u8]) {
             "BPF integrity: hash mismatch — file on disk differs \
              from build-time hash. Possible tampering or version drift."
         );
+        if strict {
+            return Err(IntegrityError::Mismatch(detector.to_string()));
+        }
     } else {
         tracing::debug!(detector, "BPF integrity: hash OK");
     }
+    Ok(())
 }
 
 const K: [u32; 64] = [

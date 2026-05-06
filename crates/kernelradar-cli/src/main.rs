@@ -212,6 +212,13 @@ async fn main() -> Result<()> {
         }
     }
 
+    // H-1: switch BPF integrity check to strict-fail mode if configured.
+    // Must happen before any detector calls verify_bpf().
+    kernelradar_detectors::integrity::set_strict_mode(cfg.integrity.strict_mode);
+    if cfg.integrity.strict_mode {
+        tracing::info!("BPF integrity check: strict mode ON — mismatch refuses to load");
+    }
+
     // Initialise webhook (T-5.3)
     init_webhook(WebhookConfig {
         enabled: cfg.webhook.enabled,
@@ -663,6 +670,21 @@ bpf_enforce_enabled  = false   # block BPF_PROG_LOAD by non-allowlisted (T-0.9)
 kmod_enforce_enabled = false   # block kernel module load by non-allowlisted (T-0.9)
 bpf_allowlist        = ["bpftrace", "falco", "kernelradar"]
 kmod_allowlist       = ["modprobe", "kmod", "insmod", "systemd-udevd"]
+
+[integrity]
+# BPF object SHA-256 verification (T-6.5 + H-1). Build-time hashes are
+# embedded into the binary; at load time the bytes on disk are re-hashed.
+#
+#   strict_mode = false  (default)  — mismatch logs an error, daemon
+#                                     keeps loading. Friendly for ad-hoc
+#                                     `cd crates/kernelradar-bpf && make`
+#                                     after install.
+#   strict_mode = true              — mismatch refuses to load. Use this
+#                                     in production when you ship the
+#                                     prebuilt .bpf.o files alongside
+#                                     the binary and want strict drift
+#                                     detection.
+strict_mode = false
 
 [network]
 # F-1: destination CIDR allowlist. connect() to addresses inside any of

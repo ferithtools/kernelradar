@@ -50,8 +50,13 @@ impl NetworkDetector {
         anyhow::ensure!(path.exists(), "BPF object not found: {}", self.bpf_obj_path);
 
         let bytes = std::fs::read(path)?;
-        verify_bpf("network", &bytes);
+        verify_bpf("network", &bytes)?;
         let mut bpf = Ebpf::load(&bytes).context("verifier rejected network BPF")?;
+
+        // H-3: pin kr_stats for external tooling.
+        if let Some(stats) = bpf.map_mut("kr_stats") {
+            let _ = stats.pin("/sys/fs/bpf/kr_stats_network");
+        }
 
         let tp: &mut TracePoint = bpf
             .program_mut("kr_tp_connect")

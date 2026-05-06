@@ -16,6 +16,7 @@
 #include <bpf/bpf_tracing.h>
 #include <bpf/bpf_core_read.h>
 #include "../include/events.h"
+#include "../include/stats.h"
 
 char LICENSE[] SEC("license") = "GPL";
 
@@ -34,10 +35,14 @@ int kr_tp_bpf_load(struct trace_event_raw_sys_enter *ctx)
     if (cmd != BPF_PROG_LOAD)
         return 0;
 
+    kr_stat_inc(KR_STAT_BPFL_OBSERVED);
+
     struct kr_event *e = bpf_ringbuf_reserve(&kr_bpfl_events,
                                               sizeof(*e), 0);
-    if (!e)
+    if (!e) {
+        kr_stat_inc(KR_STAT_BPFL_DROPPED);
         return 0;
+    }
 
     __u64 id = bpf_get_current_pid_tgid();
     __u64 ug = bpf_get_current_uid_gid();

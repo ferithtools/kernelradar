@@ -70,8 +70,13 @@ impl ContainerDetector {
         anyhow::ensure!(path.exists(), "BPF object not found: {}", self.bpf_obj_path);
 
         let bytes = std::fs::read(path)?;
-        verify_bpf("container", &bytes);
+        verify_bpf("container", &bytes)?;
         let mut bpf = Ebpf::load(&bytes).context("verifier rejected container BPF")?;
+
+        // H-3: pin kr_stats for external tooling.
+        if let Some(stats) = bpf.map_mut("kr_stats") {
+            let _ = stats.pin("/sys/fs/bpf/kr_stats_container");
+        }
 
         for (name, tp) in [
             ("kr_tp_unshare", "sys_enter_unshare"),

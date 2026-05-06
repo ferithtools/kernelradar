@@ -36,7 +36,7 @@ impl PrivEscDetector {
         );
 
         let bytes = std::fs::read(path)?;
-        verify_bpf("privesc", &bytes);
+        verify_bpf("privesc", &bytes)?;
         let mut bpf = Ebpf::load(&bytes).context("verifier rejected privesc BPF")?;
 
         // T-7.2/T-7.3: pin kr_stats so external tools (bpftool,

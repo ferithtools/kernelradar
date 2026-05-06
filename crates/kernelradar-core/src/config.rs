@@ -32,10 +32,21 @@ pub struct Config {
     pub webhook: WebhookTomlConfig,
     pub prometheus: PromTomlConfig,
     pub enforcement: EnforcementTomlConfig,
+    pub integrity: IntegrityTomlConfig,
     /// Network-detector-specific tunables (F-1).
     /// Generic per-detector knobs (enabled, allowlist) stay in `detectors`.
     pub network: NetworkTomlConfig,
     pub detectors: BTreeMap<String, DetectorConfig>,
+}
+
+/// BPF integrity check (T-6.5 + H-1). When `strict_mode = true`, a hash
+/// mismatch refuses to load the affected detector instead of just
+/// warning. Default `false` keeps the friendly "warn but continue"
+/// behaviour for first-time installs.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct IntegrityTomlConfig {
+    pub strict_mode: bool,
 }
 
 /// Network-detector tunables. Currently a destination CIDR allowlist —

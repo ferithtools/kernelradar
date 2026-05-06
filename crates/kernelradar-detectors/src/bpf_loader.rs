@@ -109,8 +109,15 @@ impl BpfLoaderDetector {
         anyhow::ensure!(path.exists(), "BPF object not found: {}", self.bpf_obj_path);
 
         let bytes = std::fs::read(path)?;
-        verify_bpf("bpf-loader", &bytes);
+        // Hash key matches build.rs `names` table (filename, underscore).
+        verify_bpf("bpf_loader", &bytes)?;
         let mut bpf = Ebpf::load(&bytes).context("verifier rejected bpf_loader BPF")?;
+
+        // H-3: pin kr_stats so external tools and the Prometheus
+        // exporter can read observed/dropped counts.
+        if let Some(stats) = bpf.map_mut("kr_stats") {
+            let _ = stats.pin("/sys/fs/bpf/kr_stats_bpfl");
+        }
 
         let tp: &mut TracePoint = bpf
             .program_mut("kr_tp_bpf_load")

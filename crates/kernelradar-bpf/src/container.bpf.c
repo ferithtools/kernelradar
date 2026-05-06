@@ -15,6 +15,7 @@
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_tracing.h>
 #include "../include/events.h"
+#include "../include/stats.h"
 
 char LICENSE[] SEC("license") = "GPL";
 
@@ -38,9 +39,14 @@ struct {
 static __always_inline void emit(struct trace_event_raw_sys_enter *ctx,
                                   __u16 event_type, __u64 d0, __u64 d1)
 {
+    kr_stat_inc(KR_STAT_CONTAINER_OBSERVED);
+
     struct kr_event *e = bpf_ringbuf_reserve(&kr_container_events,
                                               sizeof(*e), 0);
-    if (!e) return;
+    if (!e) {
+        kr_stat_inc(KR_STAT_CONTAINER_DROPPED);
+        return;
+    }
 
     __u64 id = bpf_get_current_pid_tgid();
     __u64 ug = bpf_get_current_uid_gid();

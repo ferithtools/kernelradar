@@ -16,6 +16,7 @@
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_tracing.h>
 #include "../include/events.h"
+#include "../include/stats.h"
 
 char LICENSE[] SEC("license") = "GPL";
 
@@ -39,8 +40,8 @@ static __always_inline int is_private_ipv4(__u32 addr_be)
     if (b0 == 192 && b1 == 168) return 1;                        /* 192.168/16 */
     if (b0 == 169 && b1 == 254) return 1;                        /* 169.254/16 link-local */
     if (b0 == 100 && b1 >= 64 && b1 <= 127) return 1;            /* 100.64/10 CGNAT */
-    if (b0 == 224) return 1;                                     /* 224/8 multicast */
-    if (b0 == 0)   return 1;                                     /* 0.0.0.0 */
+    if (b0 >= 224) return 1;                                     /* 224/4 multicast + 240/4 reserved */
+    if (b0 == 0)   return 1;                                     /* 0.0.0.0/8 */
     return 0;
 }
 
@@ -67,10 +68,14 @@ int kr_tp_connect(struct trace_event_raw_sys_enter *ctx)
     if (is_private_ipv4(addr_be))
         return 0;
 
+    kr_stat_inc(KR_STAT_NETWORK_OBSERVED);
+
     struct kr_event *e = bpf_ringbuf_reserve(&kr_net_events,
                                               sizeof(*e), 0);
-    if (!e)
+    if (!e) {
+        kr_stat_inc(KR_STAT_NETWORK_DROPPED);
         return 0;
+    }
 
     __u64 id = bpf_get_current_pid_tgid();
     __u64 ug = bpf_get_current_uid_gid();

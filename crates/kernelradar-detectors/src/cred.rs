@@ -123,8 +123,13 @@ impl CredDetector {
         anyhow::ensure!(path.exists(), "BPF object not found: {}", self.bpf_obj_path);
 
         let bytes = std::fs::read(path)?;
-        verify_bpf("cred", &bytes);
+        verify_bpf("cred", &bytes)?;
         let mut bpf = Ebpf::load(&bytes).context("verifier rejected cred BPF")?;
+
+        // H-3: pin kr_stats for external tooling.
+        if let Some(stats) = bpf.map_mut("kr_stats") {
+            let _ = stats.pin("/sys/fs/bpf/kr_stats_cred");
+        }
 
         let tp: &mut TracePoint = bpf
             .program_mut("kr_tp_openat_read")

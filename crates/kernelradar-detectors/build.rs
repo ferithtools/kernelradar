@@ -33,6 +33,11 @@ fn main() {
         "network",
         "injection",
         "cred",
+        // LSM enforcement programs (T-0.9 + T-6.4): hashed for integrity
+        // verification at load time (H-2), even though they're opt-in.
+        "selfprotect",
+        "enforce_bpf",
+        "enforce_kmod",
     ];
 
     let mut entries = String::new();
