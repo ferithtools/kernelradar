@@ -1,6 +1,7 @@
 pub mod bpf_loader;
 pub mod container;
 pub mod fim;
+pub mod injection;
 pub mod kmod;
 pub mod network;
 pub mod privesc;

@@ -27,6 +27,7 @@ pub enum DetectorId {
     KernelMod  = 4,
     Fim        = 5,
     Network    = 6,
+    Injection  = 7,
 }
 
 #[repr(u8)]

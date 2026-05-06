@@ -15,7 +15,7 @@ BPF_CFLAGS := \
     -D__TARGET_ARCH_$(ARCH) \
     -I$(INCLUDE)
 
-PROGRAMS := privesc bpf_loader container kmod fim network
+PROGRAMS := privesc bpf_loader container kmod fim network injection
 
 .PHONY: all clean vmlinux
 
