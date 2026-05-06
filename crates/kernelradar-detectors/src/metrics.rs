@@ -74,9 +74,9 @@ pub fn spawn_hourly_summary() {
 }
 
 fn emit_summary() {
-    // Drain emitted bucket
+    // Drain emitted bucket. M-8: poisoned mutex → recover instead of panic.
     let (emitted, suppressed_internal) = {
-        let mut c = counters().lock().unwrap();
+        let mut c = counters().lock().unwrap_or_else(|e| e.into_inner());
         let emitted = std::mem::take(&mut c.bucket_emitted);
         let supp_int = std::mem::take(&mut c.bucket_suppressed);
         (emitted, supp_int)

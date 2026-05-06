@@ -114,27 +114,37 @@ pub fn check_bpf_dir(path: &str) {
         }
     }
 
-    // Read-only mount hint
+    // Read-only mount hint. M-6: pick the LONGEST mountpoint that's a
+    // prefix of `path`, not just the first match. /proc/mounts almost
+    // always lists `/` first, which would otherwise short-circuit and
+    // miss the real bind/overlay mount sitting closer to our path.
     if let Ok(mounts) = std::fs::read_to_string("/proc/mounts") {
-        for line in mounts.lines() {
-            let parts: Vec<_> = line.split_whitespace().collect();
-            if parts.len() < 4 {
-                continue;
-            }
-            let mountpoint = parts[1];
-            // Match the closest mount that contains our path
-            if path.starts_with(mountpoint) || mountpoint == path {
-                let opts = parts[3];
-                if !opts.split(',').any(|o| o == "ro") {
-                    tracing::info!(
-                        path,
-                        mount = mountpoint,
-                        "preflight: BPF dir is on a read-write mount. \
-                         For stronger isolation, bind-mount {path} read-only \
-                         (see docs/hardening.md)"
-                    );
+        let mut candidates: Vec<(&str, &str)> = mounts
+            .lines()
+            .filter_map(|line| {
+                let parts: Vec<_> = line.split_whitespace().collect();
+                if parts.len() < 4 {
+                    return None;
                 }
-                break;
+                let mp = parts[1];
+                let opts = parts[3];
+                if path.starts_with(mp) {
+                    Some((mp, opts))
+                } else {
+                    None
+                }
+            })
+            .collect();
+        candidates.sort_by_key(|(mp, _)| std::cmp::Reverse(mp.len()));
+        if let Some((mountpoint, opts)) = candidates.first() {
+            if !opts.split(',').any(|o| o == "ro") {
+                tracing::info!(
+                    path,
+                    mount = mountpoint,
+                    "preflight: BPF dir is on a read-write mount. \
+                     For stronger isolation, bind-mount {path} read-only \
+                     (see docs/hardening.md)"
+                );
             }
         }
     }

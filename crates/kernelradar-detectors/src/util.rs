@@ -22,8 +22,32 @@ use crate::webhook::submit as webhook_submit;
 static ALERT_ID: AtomicU64 = AtomicU64::new(1);
 
 /// Read the executable path of a process from /proc/<pid>/exe.
-/// Returns None if the process has already exited (race is fine).
+///
+/// Plain version, no consistency check. Prefer
+/// [`read_exe_path_verified`] from event-handling hot paths so that a
+/// re-used PID or a post-event execve doesn't smuggle a wrong exe
+/// path into the alert.
 pub fn read_exe_path(pid: u32) -> Option<String> {
+    std::fs::read_link(format!("/proc/{}/exe", pid))
+        .ok()
+        .map(|p| p.to_string_lossy().to_string())
+}
+
+/// Read /proc/<pid>/exe, but only if the current `comm` of that PID
+/// still matches the `comm` captured by BPF at event time. Returns
+/// None if the comm differs — that's the signal that the PID was
+/// reused or the process execve'd into something else between the
+/// event and userspace catch-up (M-1 TOCTOU mitigation).
+///
+/// Note: TASK_COMM_LEN is 16, so a target comm sharing the first
+/// 15 bytes with the original can still slip through. This narrows
+/// the window dramatically without claiming to close it.
+pub fn read_exe_path_verified(pid: u32, ev_comm: &str) -> Option<String> {
+    let now_comm = std::fs::read_to_string(format!("/proc/{}/comm", pid)).ok()?;
+    let now_comm = now_comm.trim_end_matches('\n');
+    if now_comm != ev_comm {
+        return None;
+    }
     std::fs::read_link(format!("/proc/{}/exe", pid))
         .ok()
         .map(|p| p.to_string_lossy().to_string())
@@ -32,9 +56,15 @@ pub fn read_exe_path(pid: u32) -> Option<String> {
 /// Check whether a process is in the allowlist.
 ///
 /// Each allowlist entry is matched in this order:
-///   • `/regex/` — Rust regex against comm and basename(exe)
-///   • exact comm or comm prefix
-///   • exact exe path or basename(exe)
+///   • `/regex/`           — Rust regex against comm, basename(exe), exe
+///   • exact comm match    — string equality with `comm` (16-char limit)
+///   • exact exe match     — full path equality with `exe`
+///   • exact basename match — equality with last path segment of `exe`
+///
+/// M-2: prefix matching has been removed. Earlier versions also matched
+/// when `comm.starts_with(entry)`, which let `"sshd"` allowlist
+/// `"sshooly-rev-shell"`. Use `/^prefix.*/` regex when you need
+/// prefix semantics.
 pub fn is_allowed(comm: &str, exe: Option<&str>, allowlist: &[String]) -> bool {
     let exe_basename = exe.and_then(|p| p.rsplit('/').next());
 
@@ -62,9 +92,6 @@ pub fn is_allowed(comm: &str, exe: Option<&str>, allowlist: &[String]) -> bool {
         }
 
         if entry == comm {
-            return true;
-        }
-        if comm.starts_with(entry.as_str()) {
             return true;
         }
         if let Some(p) = exe {
@@ -377,13 +404,17 @@ mod tests {
     fn is_allowed_exact_comm() {
         let al = vec!["sshd".to_string()];
         assert!(is_allowed("sshd", None, &al));
-        assert!(is_allowed("sshd-session", None, &al));
         assert!(!is_allowed("ssh", None, &al));
+        // M-2: prefix matching removed. "sshooly-rev-shell" no longer
+        // sneaks past an "sshd" allowlist via comm.starts_with.
+        assert!(!is_allowed("sshd-session", None, &al));
+        assert!(!is_allowed("sshooly", None, &al));
     }
 
     #[test]
-    fn is_allowed_comm_prefix() {
-        let al = vec!["python".to_string()];
+    fn is_allowed_prefix_via_regex() {
+        // Prefix semantics now require an explicit regex.
+        let al = vec!["/^python/".to_string()];
         assert!(is_allowed("python3", None, &al));
         assert!(is_allowed("python3.11", None, &al));
         assert!(!is_allowed("py", None, &al));

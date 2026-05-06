@@ -253,6 +253,8 @@ async fn main() -> Result<()> {
             alpha: cfg.baseline.alpha,
             save_path: cfg.baseline.save_path.clone(),
             save_interval_secs: cfg.baseline.save_interval_secs,
+            pairs_max: cfg.baseline.pairs_max,
+            evict_age_hours: cfg.baseline.evict_age_hours,
         });
     }
 
@@ -540,10 +542,11 @@ async fn run_daemon(bpf_dir: &str, cli_allow: &str, config_path: &str, cfg: &Con
     // SIGHUP handler — re-load config and update allowlists + CIDRs
     spawn_sighup_handler(config_path.to_string(), shared, fallback, cidrs);
 
-    // Wait for any detector to finish (Ctrl+C propagates inside detector loops)
-    if !handles.is_empty() {
-        let (_, _, _) = futures_select(handles).await;
-    }
+    // Each detector listens for SIGINT internally and breaks its loop,
+    // so on Ctrl+C every join handle resolves nearly simultaneously.
+    // We wait for ALL of them — the previous "wait for any" semantics
+    // (M-5) silently dropped the survivors when the first one finished.
+    await_all_detectors(handles).await;
     tracing::info!("kernelradar daemon stopped");
     Ok(())
 }
@@ -607,17 +610,16 @@ fn spawn_sighup_handler(
     }
 }
 
-/// Minimal "wait for any of a Vec of JoinHandles to finish".
-async fn futures_select(
-    mut handles: Vec<tokio::task::JoinHandle<()>>,
-) -> (Vec<tokio::task::JoinHandle<()>>, (), ()) {
-    if handles.is_empty() {
-        return (handles, (), ());
+/// Wait for every spawned detector task to finish (M-5).
+///
+/// All detectors break their inner loop on SIGINT, so on a normal
+/// Ctrl+C every handle resolves shortly after each other. Iterating
+/// in spawn order is fine — `tokio::JoinHandle::await` doesn't block
+/// the runtime, the other tasks keep running until they too complete.
+async fn await_all_detectors(handles: Vec<tokio::task::JoinHandle<()>>) {
+    for h in handles {
+        let _ = h.await;
     }
-    let mut iter = handles.drain(..);
-    let first = iter.next().unwrap();
-    let _ = first.await;
-    (Vec::new(), (), ())
 }
 
 const EXAMPLE_CONFIG: &str = r#"# /etc/kernelradar/config.toml — example

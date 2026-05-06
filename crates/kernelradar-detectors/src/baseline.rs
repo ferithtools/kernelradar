@@ -36,6 +36,15 @@ pub struct BaselineConfig {
     pub save_path: String,
     /// How often to flush to disk.
     pub save_interval_secs: u64,
+    /// M-3: cap on the number of (detector, comm) pairs tracked. Once
+    /// reached, pairs whose `last_seen` is older than `evict_age_hours`
+    /// are dropped. Protects against unbounded HashMap growth from
+    /// short-lived containers, fuzzing, or hostile flooding under
+    /// many fake comms.
+    pub pairs_max: usize,
+    /// M-3: minimum staleness for eviction; younger pairs are kept
+    /// even at cap (in which case nothing is evicted that pass).
+    pub evict_age_hours: i64,
 }
 
 impl Default for BaselineConfig {
@@ -46,6 +55,8 @@ impl Default for BaselineConfig {
             alpha: 0.10,
             save_path: "/var/lib/kernelradar/baseline.json".into(),
             save_interval_secs: 300, // every 5 minutes
+            pairs_max: 10_000,
+            evict_age_hours: 24 * 7, // 7 days
         }
     }
 }
@@ -136,6 +147,28 @@ impl Baseline {
         let hour = now.hour() as usize;
         let key = Self::key(detector, comm);
 
+        // M-3: Evict stale pairs when the table grows past the cap. We
+        // only walk + retain when over cap so the steady state is free.
+        if self.pairs.len() >= self.config.pairs_max {
+            let cutoff = now - chrono::Duration::hours(self.config.evict_age_hours);
+            let before = self.pairs.len();
+            self.pairs
+                .retain(|_, p| p.last_seen.map_or(false, |t| t > cutoff));
+            // Drop matching cur_minute entries too — otherwise that map
+            // would be the new unbounded leak.
+            let live: std::collections::HashSet<_> = self.pairs.keys().cloned().collect();
+            self.cur_minute.retain(|k, _| live.contains(k));
+            let after = self.pairs.len();
+            if after < before {
+                tracing::info!(
+                    evicted = before - after,
+                    remaining = after,
+                    cap = self.config.pairs_max,
+                    "baseline: evicted stale pairs"
+                );
+            }
+        }
+
         // ── Update minute window: roll over if minute changed ───────
         let stats = self.pairs.entry(key.clone()).or_default();
         stats.total = stats.total.saturating_add(1);
@@ -181,6 +214,9 @@ impl Baseline {
     }
 
     /// Save baseline to disk (JSON).
+    /// File is written 0640 — readable by owner + kernelradar group only.
+    /// The dump contains every observed (detector, comm) pair on this
+    /// host, which is a system fingerprint and should not be world-readable.
     pub fn save(&self) -> std::io::Result<()> {
         let path = PathBuf::from(&self.config.save_path);
         if let Some(parent) = path.parent() {
@@ -191,6 +227,23 @@ impl Baseline {
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
         std::fs::write(&tmp, text)?;
         std::fs::rename(&tmp, &path)?;
+
+        // M-7: tighten permissions after the rename. set_permissions on a
+        // freshly-renamed file is the right place — chmod on the tmp would
+        // race with the rename. Failure here is logged but not fatal: the
+        // file still exists, just with whatever umask gave it.
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            if let Err(e) = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o640))
+            {
+                tracing::warn!(
+                    error = %e,
+                    path = %self.config.save_path,
+                    "baseline: could not chmod 0640 — file may be world-readable"
+                );
+            }
+        }
         Ok(())
     }
 
@@ -256,10 +309,16 @@ pub fn init_with_config(config: BaselineConfig) {
 }
 
 fn lock() -> std::sync::MutexGuard<'static, Baseline> {
+    // M-8: on poison we keep going — baseline is best-effort statistical
+    // data, the panic that poisoned the mutex was already reported. A
+    // potentially-inconsistent record is preferable to a daemon-wide crash.
     GLOBAL
         .get_or_init(|| Mutex::new(Baseline::new(BaselineConfig::default())))
         .lock()
-        .expect("baseline mutex poisoned")
+        .unwrap_or_else(|e| {
+            tracing::warn!("baseline mutex was poisoned; continuing with recovered state");
+            e.into_inner()
+        })
 }
 
 /// Record an event in the baseline; returns Some(z) when anomalous.

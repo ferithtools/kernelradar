@@ -146,6 +146,11 @@ pub struct BaselineTomlConfig {
     pub save_path: String,
     /// How often to flush to disk
     pub save_interval_secs: u64,
+    /// M-3: cap on tracked (detector, comm) pairs. Eviction kicks in
+    /// when the table reaches this size.
+    pub pairs_max: usize,
+    /// M-3: pairs older than this (last_seen-wise) are evicted when at cap.
+    pub evict_age_hours: i64,
 }
 
 impl Default for BaselineTomlConfig {
@@ -157,6 +162,8 @@ impl Default for BaselineTomlConfig {
             alpha: 0.10,
             save_path: "/var/lib/kernelradar/baseline.json".into(),
             save_interval_secs: 300,
+            pairs_max: 10_000,
+            evict_age_hours: 24 * 7,
         }
     }
 }

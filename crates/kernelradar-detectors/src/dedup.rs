@@ -205,10 +205,15 @@ impl RateLimiter {
 static GLOBAL: OnceLock<Mutex<RateLimiter>> = OnceLock::new();
 
 fn lock() -> std::sync::MutexGuard<'static, RateLimiter> {
+    // M-8: poisoned mutex → log + recover. Suppression decisions are
+    // best-effort; a missed dedup is preferable to a crashed daemon.
     GLOBAL
         .get_or_init(|| Mutex::new(RateLimiter::new(RateLimitConfig::default())))
         .lock()
-        .expect("rate limiter mutex poisoned")
+        .unwrap_or_else(|e| {
+            tracing::warn!("rate limiter mutex was poisoned; continuing with recovered state");
+            e.into_inner()
+        })
 }
 
 /// Initialise / reconfigure the global rate limiter. Call once at startup.

@@ -17,7 +17,7 @@ use tokio::signal;
 
 use crate::allowlist::SharedAllowlist;
 use crate::integrity::verify as verify_bpf;
-use crate::util::{comm_str, is_allowed, make_alert, print_alert, read_exe_path};
+use crate::util::{comm_str, is_allowed, make_alert, print_alert, read_exe_path_verified};
 use kernelradar_core::event::KrEvent;
 
 /// Paths and prefixes considered sensitive.
@@ -218,7 +218,7 @@ impl FimDetector {
         };
 
         let comm = comm_str(ev);
-        let exe = read_exe_path(ev.pid);
+        let exe = read_exe_path_verified(ev.pid, &comm);
         let al = self.allowlist.snapshot();
         if is_allowed(&comm, exe.as_deref(), &al) {
             return;

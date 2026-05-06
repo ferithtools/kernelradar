@@ -11,7 +11,7 @@ use tokio::signal;
 
 use crate::allowlist::SharedAllowlist;
 use crate::integrity::verify as verify_bpf;
-use crate::util::{comm_str, is_allowed, make_alert, print_alert, read_exe_path};
+use crate::util::{comm_str, is_allowed, make_alert, print_alert, read_exe_path_verified};
 use kernelradar_core::event::KrEvent;
 
 const PROG_TYPES: &[&str] = &[
@@ -67,7 +67,8 @@ mod tests {
         assert_eq!(prog_type_name(6), "XDP");
         assert_eq!(prog_type_name(26), "TRACING");
         assert_eq!(prog_type_name(29), "LSM");
-        assert_eq!(prog_type_name(31), "NETFILTER");
+        assert_eq!(prog_type_name(31), "SYSCALL");
+        assert_eq!(prog_type_name(32), "NETFILTER");
     }
 
     /// T-9.5 — out-of-range and saturating-large indices fall back to "UNKNOWN".
@@ -157,7 +158,7 @@ impl BpfLoaderDetector {
 
     fn handle(&self, ev: &KrEvent) {
         let comm = comm_str(ev);
-        let exe = read_exe_path(ev.pid);
+        let exe = read_exe_path_verified(ev.pid, &comm);
         let al = self.allowlist.snapshot();
         if is_allowed(&comm, exe.as_deref(), &al) {
             return;

@@ -128,7 +128,13 @@ pub fn install(cfg: &EnforcementConfig) {
     }
 
     let cell = LOADED.get_or_init(|| std::sync::Mutex::new(None));
-    *cell.lock().expect("lsm mutex") = Some(state);
+    // M-8: poisoned mutex → log + recover. install() runs once at startup,
+    // so poisoning is unlikely; fall back to overwriting the inner state.
+    let mut guard = cell.lock().unwrap_or_else(|e| {
+        tracing::warn!("LSM state mutex was poisoned; recovering");
+        e.into_inner()
+    });
+    *guard = Some(state);
 }
 
 /// Load an LSM program object file, verify its SHA-256 against the

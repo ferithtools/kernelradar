@@ -125,8 +125,7 @@ mod tests {
 
     #[test]
     fn sanitize_url_strips_slack_token() {
-        let s =
-            sanitize_url("https://hooks.slack.com/services/T0001/B0001/SECRET_TOKEN_PAYLOAD");
+        let s = sanitize_url("https://hooks.slack.com/services/T0001/B0001/SECRET_TOKEN_PAYLOAD");
         assert_eq!(s, "https://hooks.slack.com");
     }
 
