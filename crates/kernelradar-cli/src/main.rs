@@ -3,6 +3,7 @@ use clap::{Parser, Subcommand};
 use kernelradar_detectors::{
     bpf_loader::BpfLoaderDetector,
     container::ContainerDetector,
+    cred::CredDetector,
     fim::FimDetector,
     injection::InjectionDetector,
     kmod::KmodDetector,
@@ -133,9 +134,15 @@ async fn main() -> Result<()> {
                     d.json = json;
                     d.run().await?;
                 }
+                "cred" => {
+                    let mut d = CredDetector::new(
+                        &format!("{bpf_dir}/cred.bpf.o"), al);
+                    d.json = json;
+                    d.run().await?;
+                }
                 other => {
                     eprintln!("Unknown detector: {other}");
-                    eprintln!("Available: privesc | bpf-loader | container | kmod | fim | network | injection");
+                    eprintln!("Available: privesc | bpf-loader | container | kmod | fim | network | injection | cred");
                     std::process::exit(1);
                 }
             }
@@ -150,6 +157,7 @@ async fn main() -> Result<()> {
             println!("  [5] fim         ✅");
             println!("  [6] network     ✅");
             println!("  [7] injection   ✅");
+            println!("  [8] cred        ✅");
         }
     }
     Ok(())
@@ -163,7 +171,7 @@ async fn run_daemon(bpf_dir: &str, allow: &str, json: bool) -> Result<()> {
     let al = parse_allow(allow);
     if !json {
         println!("kernelradar {}", env!("CARGO_PKG_VERSION"));
-        println!("daemon mode — 7 detectors active");
+        println!("daemon mode — 8 detectors active");
         println!("Allowlist: {allow}");
         println!("Press Ctrl+C to stop.\n");
     }
@@ -210,10 +218,16 @@ async fn run_daemon(bpf_dir: &str, allow: &str, json: bool) -> Result<()> {
             if let Err(e) = d.run().await { tracing::error!("injection: {e}"); }
         })
     };
+    let d8 = { let (o, a) = (format!("{bpf_dir}/cred.bpf.o"), al.clone());
+        tokio::spawn(async move {
+            let mut d = CredDetector::new(&o, a); d.json = json;
+            if let Err(e) = d.run().await { tracing::error!("cred: {e}"); }
+        })
+    };
 
     tokio::select! {
         _ = d1 => {}  _ = d2 => {}  _ = d3 => {}  _ = d4 => {}
-        _ = d5 => {}  _ = d6 => {}  _ = d7 => {}
+        _ = d5 => {}  _ = d6 => {}  _ = d7 => {}  _ = d8 => {}
     }
     println!("\nkernelradar stopped.");
     Ok(())

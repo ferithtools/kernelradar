@@ -10,6 +10,7 @@
 #define KR_DETECTOR_FIM         5
 #define KR_DETECTOR_NETWORK     6
 #define KR_DETECTOR_INJECTION   7
+#define KR_DETECTOR_CRED        8
 
 #define KR_SEV_INFO     0
 #define KR_SEV_WARNING  1
@@ -41,6 +42,10 @@
 #define KR_INJ_PTRACE_ATTACH    1   /* PTRACE_ATTACH or PTRACE_SEIZE */
 #define KR_INJ_PTRACE_POKE      2   /* PTRACE_POKE{TEXT,DATA,USER} */
 #define KR_INJ_VM_WRITEV        3   /* process_vm_writev() */
+
+/* ── Credential theft event types ───────────────────────────────────── */
+
+#define KR_CRED_READ            1   /* read open of credential file */
 
 /* ── Common event struct (must match Rust KrEvent) ───────────────────── */
 

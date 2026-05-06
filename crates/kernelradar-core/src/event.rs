@@ -28,6 +28,7 @@ pub enum DetectorId {
     Fim        = 5,
     Network    = 6,
     Injection  = 7,
+    Cred       = 8,
 }
 
 #[repr(u8)]
