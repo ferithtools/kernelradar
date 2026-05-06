@@ -6,14 +6,19 @@
 # /etc/kernelradar/config.toml
 [prometheus]
 enabled     = true
-listen_addr = "127.0.0.1:9100"
+listen_addr = "127.0.0.1:9101"
 ```
+
+> **Why 9101, not 9100?** Port 9100 is the de-facto standard for
+> `node_exporter` on every Linux host running the prometheus stack.
+> Binding kernelradar to 9100 silently collides with it and causes
+> confusing scrape failures. 9101 is free by convention.
 
 Then:
 
 ```bash
 sudo systemctl restart kernelradar
-curl http://127.0.0.1:9100/metrics
+curl http://127.0.0.1:9101/metrics
 ```
 
 ## Exposed series
@@ -45,7 +50,7 @@ kernelradar_build_info{version="0.1.0"} 1
 scrape_configs:
   - job_name: kernelradar
     static_configs:
-      - targets: ['10.0.0.1:9100']
+      - targets: ['10.0.0.1:9101']
     scrape_interval: 30s
 ```
 

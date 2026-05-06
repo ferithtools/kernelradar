@@ -32,10 +32,11 @@ use kernelradar_detectors::{
 
 const DEFAULT_ALLOW: &str = "runc,containerd,dockerd,podman,crio,\
 modprobe,kmod,insmod,\
-bpftrace,falco,kernelradar,\
+bpftrace,falco,kernelradar,bpftool,bcc,\
 sshd,su,sudo,login,polkitd,dbus-daemon,cron,crond,systemd,\
 AdGuardHome,systemd-resolved,chronyd,ntpd,timesyncd,\
-apt,apt-get,dpkg,unattended-upgr,\
+apt,apt-get,dpkg,unattended-upgr,yum,dnf,rpm,\
+node_exporter,telegraf,fluent-bit,filebeat,promtail,wazuh-agent,\
 exim4,postfix,sendmail,\
 gdb,lldb,strace,ltrace,perf,rr";
 
@@ -50,7 +51,7 @@ enum CliFormat { Auto, Plain, Json, Journald, Falco }
 #[derive(Parser)]
 #[command(name = "kernelradar")]
 #[command(about = "Behavioral anomaly detection for the Linux kernel")]
-#[command(version)]
+#[command(version = env!("KERNELRADAR_VERSION_FULL"))]
 struct Cli {
     /// Path to TOML config (optional; CLI flags override)
     #[arg(long, default_value = "/etc/kernelradar/config.toml", global = true)]
@@ -541,8 +542,10 @@ severity_filter_alert_or_higher = false  # set true for Slack/Telegram-style noi
 
 [prometheus]
 # Tiny HTTP server exposing alerts/bursts/anomalies counters at /metrics.
+# Port 9101 (not 9100) — node_exporter owns 9100 on every host running the
+# prometheus stack, and silent collisions cause confusing scrape failures.
 enabled     = false
-listen_addr = "127.0.0.1:9100"
+listen_addr = "127.0.0.1:9101"
 
 [enforcement]
 # DANGER: enabling these LSM hooks can break the system if misconfigured.
@@ -584,9 +587,21 @@ enabled = true
 
 [detectors.network]
 enabled   = true
+# Tip: real production servers carry monitoring agents and data-collection
+# scripts that connect frequently — without allowlisting them you drown in
+# legitimate traffic. Identify yours via `journalctl -u kernelradar -o cat`,
+# look at the connect→ ... by <comm> lines, then add comm names here.
 allowlist = [
+    # System resolvers / time / package management
     "AdGuardHome", "systemd-resolved", "chronyd", "ntpd", "timesyncd",
-    "apt", "apt-get", "dpkg", "unattended-upgr",
+    "apt", "apt-get", "dpkg", "unattended-upgr", "yum", "dnf", "rpm",
+    # Monitoring agents commonly noisy on production hosts
+    "node_exporter", "telegraf", "fluent-bit", "filebeat", "promtail",
+    "wazuh-agent",
+    # Add your environment-specific noisemakers here, for example:
+    # "ssh-telegram-alerts.py",     # heartbeat scripts
+    # "/your-data-pipeline.py",     # data ingestion
+    # "/usr/bin/curl",              # only if you trust everything calling curl
 ]
 
 [detectors.injection]

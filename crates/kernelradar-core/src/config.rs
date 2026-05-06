@@ -89,7 +89,9 @@ impl Default for PromTomlConfig {
     fn default() -> Self {
         Self {
             enabled:     false,
-            listen_addr: "127.0.0.1:9100".into(),
+            // 9101 to avoid collision with node_exporter, which owns 9100
+            // by convention on every Linux host running prometheus stack.
+            listen_addr: "127.0.0.1:9101".into(),
         }
     }
 }
