@@ -1,0 +1,55 @@
+[Unit]
+Description=kernelradar — behavioral anomaly detection for the Linux kernel
+Documentation=https://github.com/cycloon/kernelradar
+After=network.target
+ConditionKernelVersion=>=6.1
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/kernelradar daemon \
+    --bpf-dir /var/lib/kernelradar/bpf \
+    --json
+Restart=on-failure
+RestartSec=5
+
+# stdout/stderr → journald with t=kernelradar
+SyslogIdentifier=kernelradar
+StandardOutput=journal
+StandardError=journal
+
+# Capabilities: BPF + tracepoints. We don't need full root for BPF
+# on kernel 5.8+, but some helpers (bpf_probe_read_user) require
+# CAP_SYS_ADMIN. Keep it minimal but sufficient.
+AmbientCapabilities=CAP_BPF CAP_PERFMON CAP_SYS_RESOURCE CAP_SYS_ADMIN
+CapabilityBoundingSet=CAP_BPF CAP_PERFMON CAP_SYS_RESOURCE CAP_SYS_ADMIN
+NoNewPrivileges=false
+
+# Filesystem hardening: read-only except journald + own state
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/kernelradar /run/kernelradar
+StateDirectory=kernelradar
+RuntimeDirectory=kernelradar
+
+# Process hardening
+ProtectKernelTunables=false   # we LOAD BPF, may need /proc/sys/kernel access
+ProtectKernelModules=false    # likewise — bpf is "loading kernel code"
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=false  # BPF JIT generates executable code
+
+# Network: not needed (only emits to journald). Drop AF_INET if you wish.
+RestrictAddressFamilies=AF_UNIX AF_NETLINK
+
+# Resource limits — keep small, BPF programs are tiny
+MemoryMax=256M
+TasksMax=64
+
+[Install]
+WantedBy=multi-user.target

@@ -3,6 +3,7 @@ use clap::{Parser, Subcommand};
 use kernelradar_detectors::{
     bpf_loader::BpfLoaderDetector,
     container::ContainerDetector,
+    fim::FimDetector,
     kmod::KmodDetector,
     privesc::PrivEscDetector,
 };
@@ -102,9 +103,15 @@ async fn main() -> Result<()> {
                     d.json = json;
                     d.run().await?;
                 }
+                "fim" => {
+                    let mut d = FimDetector::new(
+                        &format!("{bpf_dir}/fim.bpf.o"), al);
+                    d.json = json;
+                    d.run().await?;
+                }
                 other => {
                     eprintln!("Unknown detector: {other}");
-                    eprintln!("Available: privesc | bpf-loader | container | kmod");
+                    eprintln!("Available: privesc | bpf-loader | container | kmod | fim");
                     std::process::exit(1);
                 }
             }
@@ -116,6 +123,7 @@ async fn main() -> Result<()> {
             println!("  [2] bpf-loader  ✅");
             println!("  [3] container   ✅");
             println!("  [4] kmod        ✅");
+            println!("  [5] fim         ✅");
         }
     }
     Ok(())
@@ -129,7 +137,7 @@ async fn run_daemon(bpf_dir: &str, allow: &str, json: bool) -> Result<()> {
     let al = parse_allow(allow);
     if !json {
         println!("kernelradar {}", env!("CARGO_PKG_VERSION"));
-        println!("daemon mode — 4 detectors active");
+        println!("daemon mode — 5 detectors active");
         println!("Allowlist: {allow}");
         println!("Press Ctrl+C to stop.\n");
     }
@@ -158,9 +166,15 @@ async fn run_daemon(bpf_dir: &str, allow: &str, json: bool) -> Result<()> {
             if let Err(e) = d.run().await { tracing::error!("kmod: {e}"); }
         })
     };
+    let d5 = { let (o, a) = (format!("{bpf_dir}/fim.bpf.o"), al.clone());
+        tokio::spawn(async move {
+            let mut d = FimDetector::new(&o, a); d.json = json;
+            if let Err(e) = d.run().await { tracing::error!("fim: {e}"); }
+        })
+    };
 
     tokio::select! {
-        _ = d1 => {}  _ = d2 => {}  _ = d3 => {}  _ = d4 => {}
+        _ = d1 => {}  _ = d2 => {}  _ = d3 => {}  _ = d4 => {}  _ = d5 => {}
     }
     println!("\nkernelradar stopped.");
     Ok(())

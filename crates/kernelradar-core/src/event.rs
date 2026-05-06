@@ -25,6 +25,7 @@ pub enum DetectorId {
     BpfRootkit = 2,
     Container  = 3,
     KernelMod  = 4,
+    Fim        = 5,
 }
 
 #[repr(u8)]

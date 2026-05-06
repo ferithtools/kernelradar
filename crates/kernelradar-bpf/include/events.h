@@ -7,6 +7,7 @@
 #define KR_DETECTOR_BPF_LOADER  2
 #define KR_DETECTOR_CONTAINER   3
 #define KR_DETECTOR_KMOD        4
+#define KR_DETECTOR_FIM         5
 
 #define KR_SEV_INFO     0
 #define KR_SEV_WARNING  1
@@ -24,6 +25,10 @@
 /* ── BPF loader event types ─────────────────────────────────────────── */
 
 #define KR_BPF_PROG_LOAD        1   /* BPF_PROG_LOAD from unknown process */
+
+/* ── FIM event types ────────────────────────────────────────────────── */
+
+#define KR_FIM_OPEN_WRITE       1   /* openat() with write/append/create */
 
 /* ── Common event struct (must match Rust KrEvent) ───────────────────── */
 
