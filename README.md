@@ -4,7 +4,7 @@
 > a single Rust binary, no Kubernetes, no SaaS, no telemetry leaving the host.
 
 [![License: GPL-2.0-only](https://img.shields.io/badge/License-GPL%20v2-blue.svg)](LICENSE)
-[![CI](https://github.com/ferith-tools/kernelradar/actions/workflows/ci.yml/badge.svg)](https://github.com/ferith-tools/kernelradar/actions/workflows/ci.yml)
+[![CI](https://github.com/ferithtools/kernelradar/actions/workflows/ci.yml/badge.svg)](https://github.com/ferithtools/kernelradar/actions/workflows/ci.yml)
 [![Version](https://img.shields.io/badge/version-v0.1.0--preview-orange.svg)](#)
 [![Linux only](https://img.shields.io/badge/platform-linux--6.1%2B-lightgrey.svg)](#)
 
@@ -115,7 +115,7 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 Build and run:
 
 ```bash
-git clone https://github.com/ferith-tools/kernelradar.git
+git clone https://github.com/ferithtools/kernelradar.git
 cd kernelradar
 
 # 1. Compile the BPF objects
@@ -477,7 +477,7 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 Собрать и запустить:
 
 ```bash
-git clone https://github.com/ferith-tools/kernelradar.git
+git clone https://github.com/ferithtools/kernelradar.git
 cd kernelradar
 
 # 1. Собрать BPF-объекты
