@@ -13,6 +13,7 @@ use tokio::signal;
 
 use kernelradar_core::event::KrEvent;
 use crate::allowlist::SharedAllowlist;
+use crate::cidr::SharedCidrList;
 use crate::integrity::verify as verify_bpf;
 use crate::util::{comm_str, is_allowed, make_alert, print_alert, read_exe_path};
 
@@ -25,11 +26,22 @@ const SUSPICIOUS_PORTS: &[u16] = &[
 pub struct NetworkDetector {
     bpf_obj_path: String,
     allowlist:    SharedAllowlist,
+    /// Destination CIDR allowlist (F-1). Connections to addresses inside
+    /// any listed CIDR are suppressed before process-allowlist evaluation.
+    cidrs:        SharedCidrList,
 }
 
 impl NetworkDetector {
-    pub fn new(bpf_obj_path: &str, allowlist: SharedAllowlist) -> Self {
-        Self { bpf_obj_path: bpf_obj_path.to_string(), allowlist }
+    pub fn new(
+        bpf_obj_path: &str,
+        allowlist:    SharedAllowlist,
+        cidrs:        SharedCidrList,
+    ) -> Self {
+        Self {
+            bpf_obj_path: bpf_obj_path.to_string(),
+            allowlist,
+            cidrs,
+        }
     }
 
     pub async fn run(&self) -> Result<()> {
@@ -53,6 +65,7 @@ impl NetworkDetector {
 
         tracing::info!(detector = "network",
                         allowlist_size = self.allowlist.snapshot().len(),
+                        cidr_allowlist_size = self.cidrs.len(),
                         "watching connect() to public IPs");
 
         loop {
@@ -73,18 +86,24 @@ impl NetworkDetector {
     }
 
     fn handle(&self, ev: &KrEvent) {
-        let comm = comm_str(ev);
-        let exe  = read_exe_path(ev.pid);
-        let al   = self.allowlist.snapshot();
-        if is_allowed(&comm, exe.as_deref(), &al) { return; }
-
         // data[0] low 32 bits = (family << 16) | port_be
         // data[1] = ipv4 addr_be
         let port_be = (ev.data[0] & 0xffff) as u16;
         let addr_be = (ev.data[1] & 0xffffffff) as u32;
 
-        let port = u16::from_be(port_be);
-        let ip   = Ipv4Addr::from(u32::from_be(addr_be));
+        let port    = u16::from_be(port_be);
+        let ip_host = u32::from_be(addr_be);
+        let ip      = Ipv4Addr::from(ip_host);
+
+        // F-1: destination CIDR allowlist short-circuits before process
+        // attribution — saves the /proc/<pid>/exe read for whitelisted
+        // destinations on busy hosts (Telegram heartbeats, etc.).
+        if self.cidrs.contains(ip_host) { return; }
+
+        let comm = comm_str(ev);
+        let exe  = read_exe_path(ev.pid);
+        let al   = self.allowlist.snapshot();
+        if is_allowed(&comm, exe.as_deref(), &al) { return; }
 
         let suspicious = SUSPICIOUS_PORTS.contains(&port);
         let mut ev_copy = ev.clone();

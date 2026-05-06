@@ -12,6 +12,7 @@ use kernelradar_detectors::{
         BaselineConfig,
     },
     bpf_loader::BpfLoaderDetector,
+    cidr::{parse_all as parse_cidrs, SharedCidrList},
     container::ContainerDetector,
     cred::CredDetector,
     dedup::{init as init_rate_limit, RateLimitConfig},
@@ -279,7 +280,15 @@ async fn main() -> Result<()> {
         Commands::Detect { detector, bpf_dir, allow } => {
             let fallback = parse_allow(&allow);
             let al = SharedAllowlist::new(cfg.allowlist_for(&detector, &fallback));
-            run_single_detector(&detector, &bpf_dir, al).await?;
+            let (parsed, skipped) =
+                parse_cidrs(&cfg.network.destination_cidr_allowlist);
+            if skipped > 0 {
+                tracing::warn!(skipped,
+                    "network: {skipped} invalid CIDR(s) skipped from \
+                     destination_cidr_allowlist");
+            }
+            let cidrs = SharedCidrList::new(parsed);
+            run_single_detector(&detector, &bpf_dir, al, cidrs).await?;
         }
         Commands::Status => {
             print_status();
@@ -333,14 +342,19 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-async fn run_single_detector(name: &str, bpf_dir: &str, al: SharedAllowlist) -> Result<()> {
+async fn run_single_detector(
+    name: &str,
+    bpf_dir: &str,
+    al: SharedAllowlist,
+    cidrs: SharedCidrList,
+) -> Result<()> {
     match name {
         "privesc"     => PrivEscDetector::new(&format!("{bpf_dir}/privesc.bpf.o"),    al).run().await,
         "bpf-loader"  => BpfLoaderDetector::new(&format!("{bpf_dir}/bpf_loader.bpf.o"), al).run().await,
         "container"   => ContainerDetector::new(&format!("{bpf_dir}/container.bpf.o"), al).run().await,
         "kmod"        => KmodDetector::new(&format!("{bpf_dir}/kmod.bpf.o"),         al).run().await,
         "fim"         => FimDetector::new(&format!("{bpf_dir}/fim.bpf.o"),          al).run().await,
-        "network"     => NetworkDetector::new(&format!("{bpf_dir}/network.bpf.o"),    al).run().await,
+        "network"     => NetworkDetector::new(&format!("{bpf_dir}/network.bpf.o"),    al, cidrs).run().await,
         "injection"   => InjectionDetector::new(&format!("{bpf_dir}/injection.bpf.o"), al).run().await,
         "cred"        => CredDetector::new(&format!("{bpf_dir}/cred.bpf.o"),         al).run().await,
         other         => {
@@ -400,10 +414,20 @@ async fn run_daemon(
         shared.insert(name, SharedAllowlist::new(lst));
     }
 
+    // F-1: destination CIDR allowlist for the network detector.
+    let (parsed_cidrs, skipped_cidrs) =
+        parse_cidrs(&cfg.network.destination_cidr_allowlist);
+    if skipped_cidrs > 0 {
+        tracing::warn!(skipped = skipped_cidrs,
+            "network: {skipped_cidrs} invalid CIDR(s) skipped at startup");
+    }
+    let cidrs = SharedCidrList::new(parsed_cidrs);
+
     tracing::info!(
         version = env!("CARGO_PKG_VERSION"),
         config  = config_path,
         detectors = DETECTOR_NAMES.len(),
+        cidrs   = cidrs.len(),
         "kernelradar daemon starting"
     );
 
@@ -431,12 +455,26 @@ async fn run_daemon(
     spawn_detector!("container",  "container.bpf.o",  ContainerDetector);
     spawn_detector!("kmod",       "kmod.bpf.o",       KmodDetector);
     spawn_detector!("fim",        "fim.bpf.o",        FimDetector);
-    spawn_detector!("network",    "network.bpf.o",    NetworkDetector);
+
+    // network — needs the destination CIDR allowlist (F-1), spawn explicitly
+    if cfg.detector_enabled("network") {
+        let obj   = format!("{dir}/network.bpf.o");
+        let al    = shared.get("network").cloned().unwrap();
+        let cidrs = cidrs.clone();
+        handles.push(tokio::spawn(async move {
+            if let Err(e) = NetworkDetector::new(&obj, al, cidrs).run().await {
+                tracing::error!("network: {e}");
+            }
+        }));
+    } else {
+        tracing::info!(detector = "network", "disabled in config");
+    }
+
     spawn_detector!("injection",  "injection.bpf.o",  InjectionDetector);
     spawn_detector!("cred",       "cred.bpf.o",       CredDetector);
 
-    // SIGHUP handler — re-load config and update allowlists in place
-    spawn_sighup_handler(config_path.to_string(), shared, fallback);
+    // SIGHUP handler — re-load config and update allowlists + CIDRs
+    spawn_sighup_handler(config_path.to_string(), shared, fallback, cidrs);
 
     // Wait for any detector to finish (Ctrl+C propagates inside detector loops)
     if !handles.is_empty() {
@@ -450,6 +488,7 @@ fn spawn_sighup_handler(
     config_path: String,
     shared: std::collections::BTreeMap<&'static str, SharedAllowlist>,
     fallback: Vec<String>,
+    cidrs: SharedCidrList,
 ) {
     #[cfg(unix)]
     {
@@ -479,7 +518,16 @@ fn spawn_sighup_handler(
                             let lst = new_cfg.allowlist_for(name, &fallback);
                             sl.replace(lst);
                         }
-                        tracing::info!("config reload complete");
+                        // F-1: reload destination CIDR allowlist atomically
+                        let (parsed, skipped) = parse_cidrs(
+                            &new_cfg.network.destination_cidr_allowlist);
+                        if skipped > 0 {
+                            tracing::warn!(skipped,
+                                "network: {skipped} invalid CIDR(s) skipped on reload");
+                        }
+                        cidrs.replace(parsed);
+                        tracing::info!(cidrs = cidrs.len(),
+                                       "config reload complete");
                     }
                     Err(e) => tracing::error!("reload failed: {e}"),
                 }
@@ -488,7 +536,7 @@ fn spawn_sighup_handler(
     }
     #[cfg(not(unix))]
     {
-        let _ = (config_path, shared, fallback);
+        let _ = (config_path, shared, fallback, cidrs);
     }
 }
 
@@ -556,6 +604,21 @@ kmod_enforce_enabled = false   # block kernel module load by non-allowlisted (T-
 bpf_allowlist        = ["bpftrace", "falco", "kernelradar"]
 kmod_allowlist       = ["modprobe", "kmod", "insmod", "systemd-udevd"]
 
+[network]
+# F-1: destination CIDR allowlist. connect() to addresses inside any of
+# these CIDRs is suppressed before process-allowlist evaluation —
+# cheaper (no /proc/<pid>/exe lookup) and more reliable than
+# allowlisting every process that legitimately calls home.
+#
+# Common production CIDRs to consider:
+#   "149.154.0.0/16"   # Telegram (api.telegram.org et al.)
+#   "64.233.160.0/19"  # Google APIs (one of many ranges)
+#   "172.65.0.0/16"    # Cloudflare
+#   "13.0.0.0/8"       # AWS (very broad — only if you trust everything calling AWS)
+#
+# IPv4 only for now — IPv6 destinations always alert.
+destination_cidr_allowlist = []
+
 # Allowlist entries:
 #   "exact"        — match comm or basename(exe)
 #   "/regex.*/"    — Rust regex against comm/exe
@@ -591,6 +654,9 @@ enabled   = true
 # scripts that connect frequently — without allowlisting them you drown in
 # legitimate traffic. Identify yours via `journalctl -u kernelradar -o cat`,
 # look at the connect→ ... by <comm> lines, then add comm names here.
+# Alternative: whitelist destinations (CIDRs) under [network] above —
+# better when many processes legitimately reach the same external service
+# (Telegram, Google, Cloudflare).
 allowlist = [
     # System resolvers / time / package management
     "AdGuardHome", "systemd-resolved", "chronyd", "ntpd", "timesyncd",

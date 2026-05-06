@@ -26,7 +26,23 @@ pub struct Config {
     pub webhook:    WebhookTomlConfig,
     pub prometheus: PromTomlConfig,
     pub enforcement: EnforcementTomlConfig,
+    /// Network-detector-specific tunables (F-1).
+    /// Generic per-detector knobs (enabled, allowlist) stay in `detectors`.
+    pub network:    NetworkTomlConfig,
     pub detectors:  BTreeMap<String, DetectorConfig>,
+}
+
+/// Network-detector tunables. Currently a destination CIDR allowlist —
+/// connect() to any address inside one of these CIDRs is suppressed
+/// before process-allowlist evaluation. IPv4 only for now.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct NetworkTomlConfig {
+    /// CIDRs to whitelist as connection destinations.
+    /// Example: ["149.154.0.0/16", "64.233.160.0/19", "172.65.0.0/16"]
+    /// (Telegram + a Google block + Cloudflare). Invalid entries are
+    /// logged at startup and skipped.
+    pub destination_cidr_allowlist: Vec<String>,
 }
 
 /// LSM enforcement (T-0.9) and self-protection (T-6.4).
@@ -272,6 +288,28 @@ impl Config {
             }
         }
 
+        // Validate CIDR strings — same syntactic shape detectors/cidr.rs
+        // will accept at runtime. Keep the check here local (no
+        // detectors-crate dep) so config validation stays standalone.
+        for entry in &self.network.destination_cidr_allowlist {
+            if !is_valid_ipv4_cidr(entry) {
+                issues.push(format!("network.destination_cidr_allowlist: \
+                                     invalid CIDR {entry:?} \
+                                     (expected a.b.c.d/N, N in 0..=32)"));
+            }
+        }
+
         issues
+    }
+}
+
+/// Cheap IPv4-CIDR syntactic check used by Config::validate. Mirrors the
+/// runtime parser in `kernelradar_detectors::cidr::Cidr::parse`.
+fn is_valid_ipv4_cidr(s: &str) -> bool {
+    let Some((addr, len)) = s.split_once('/') else { return false; };
+    if addr.trim().parse::<std::net::Ipv4Addr>().is_err() { return false; }
+    match len.trim().parse::<u32>() {
+        Ok(n) if n <= 32 => true,
+        _                => false,
     }
 }

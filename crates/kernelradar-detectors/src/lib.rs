@@ -1,6 +1,7 @@
 pub mod allowlist;
 pub mod baseline;
 pub mod bpf_loader;
+pub mod cidr;
 pub mod container;
 pub mod cred;
 pub mod dedup;
