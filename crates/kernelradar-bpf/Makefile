@@ -7,16 +7,16 @@ SRC     := src
 OUT     := .output
 INCLUDE := include
 
+# When using vmlinux.h, do NOT add kernel UAPI headers — they conflict.
+# vmlinux.h is self-contained and provides all required types.
 BPF_CFLAGS := \
     -g -O2 -Wall \
     -target bpf \
     -D__TARGET_ARCH_$(ARCH) \
-    -I$(INCLUDE) \
-    -I$(KERNEL_HEADERS)/arch/$(ARCH)/include/uapi \
-    -I$(KERNEL_HEADERS)/include/uapi \
-    -I$(KERNEL_HEADERS)/include
+    -I$(INCLUDE)
 
-PROGRAMS := privesc bpf_loader
+PROGRAMS := privesc
+# bpf_loader added in Phase 1 step 2
 
 .PHONY: all clean vmlinux
 

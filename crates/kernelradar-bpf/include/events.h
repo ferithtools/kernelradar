@@ -1,5 +1,5 @@
 #pragma once
-#include <linux/types.h>
+/* Types come from vmlinux.h — do NOT include <linux/types.h> here */
 
 /* ── Event identifiers ───────────────────────────────────────────────── */
 
