@@ -1,0 +1,94 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  fmt:
+    name: cargo fmt (T-9.3)
+    runs-on: ubuntu-latest
+    # Soft check: codebase uses an aligned-fields style that diverges
+    # from rustfmt defaults. Tracked separately — fmt produces an info
+    # report but does not block PRs until the style decision is finalized.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - run: cargo fmt --all --check
+
+  clippy:
+    name: cargo clippy (T-9.2)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: clippy --workspace --all-targets -D warnings
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+  build-test:
+    name: build + test (T-9.1, T-9.5, T-9.8)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: cargo build --workspace --release
+        run: cargo build --workspace --release
+      - name: cargo test --workspace --all-targets
+        run: cargo test --workspace --all-targets
+
+  bpf:
+    name: BPF build (T-9.4)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install clang + libbpf + bpftool
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            clang llvm libbpf-dev linux-tools-common linux-tools-generic
+          BPFTOOL_BIN=$(find /usr/lib/linux-tools-* -name bpftool 2>/dev/null | head -1)
+          if [ -n "$BPFTOOL_BIN" ]; then
+            sudo ln -sf "$BPFTOOL_BIN" /usr/local/bin/bpftool
+          fi
+          clang --version
+          bpftool version || true
+      - name: Verify runner kernel exposes BTF
+        run: |
+          if [ ! -r /sys/kernel/btf/vmlinux ]; then
+            echo "::error::Runner kernel has no BTF at /sys/kernel/btf/vmlinux"
+            echo "kernelradar BPF build requires CONFIG_DEBUG_INFO_BTF=y on the build host"
+            exit 1
+          fi
+          ls -la /sys/kernel/btf/vmlinux
+      - name: Build BPF objects
+        working-directory: crates/kernelradar-bpf
+        run: make
+      - name: Verify all BPF objects produced
+        working-directory: crates/kernelradar-bpf
+        run: |
+          ls -la .output/
+          for prog in privesc bpf_loader container kmod fim network injection cred \
+                      selfprotect enforce_bpf enforce_kmod; do
+            test -f ".output/${prog}.bpf.o" || { echo "missing: ${prog}.bpf.o"; exit 1; }
+          done
+
+  audit:
+    name: cargo audit (T-9.9)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: rustsec/audit-check@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}

@@ -22,6 +22,40 @@ fn prog_type_name(t: u32) -> &'static str {
     PROG_TYPES.get(t as usize).copied().unwrap_or("UNKNOWN")
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// T-9.5 — known BPF prog type indices map to their kernel names.
+    #[test]
+    fn prog_type_name_known_indices() {
+        assert_eq!(prog_type_name(0),  "UNSPEC");
+        assert_eq!(prog_type_name(2),  "KPROBE");
+        assert_eq!(prog_type_name(5),  "TRACEPOINT");
+        assert_eq!(prog_type_name(6),  "XDP");
+        assert_eq!(prog_type_name(26), "TRACING");
+        assert_eq!(prog_type_name(29), "LSM");
+        assert_eq!(prog_type_name(31), "NETFILTER");
+    }
+
+    /// T-9.5 — out-of-range and saturating-large indices fall back to "UNKNOWN".
+    #[test]
+    fn prog_type_name_unknown_for_oob() {
+        assert_eq!(prog_type_name(PROG_TYPES.len() as u32), "UNKNOWN");
+        assert_eq!(prog_type_name(99),          "UNKNOWN");
+        assert_eq!(prog_type_name(u32::MAX),    "UNKNOWN");
+    }
+
+    /// T-9.5 — every defined index resolves (no holes in the table).
+    #[test]
+    fn prog_type_name_table_complete() {
+        for i in 0..PROG_TYPES.len() as u32 {
+            assert_ne!(prog_type_name(i), "UNKNOWN",
+                "index {i} unexpectedly returns UNKNOWN");
+        }
+    }
+}
+
 pub struct BpfLoaderDetector {
     bpf_obj_path: String,
     allowlist:    SharedAllowlist,

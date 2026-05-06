@@ -272,3 +272,139 @@ pub fn comm_str(ev: &KrEvent) -> String {
         ev.comm.split(|&b| b == 0).next().unwrap_or(&[])
     ).to_string()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use kernelradar_core::event::KrEvent;
+
+    fn ev_with_comm(bytes: &[u8]) -> KrEvent {
+        let mut comm = [0u8; 16];
+        let n = bytes.len().min(16);
+        comm[..n].copy_from_slice(&bytes[..n]);
+        KrEvent {
+            timestamp_ns: 0, pid: 0, tid: 0, uid: 0, gid: 0,
+            comm, detector_id: 0, severity: 0, event_type: 0,
+            data: [0; 4],
+        }
+    }
+
+    /// T-9.5 — comm_str trims at first NUL byte.
+    #[test]
+    fn comm_str_trims_at_nul() {
+        assert_eq!(comm_str(&ev_with_comm(b"sshd\0\0\0")), "sshd");
+        assert_eq!(comm_str(&ev_with_comm(b"sudo\0extra")), "sudo");
+        assert_eq!(comm_str(&ev_with_comm(b"\0")), "");
+    }
+
+    /// T-9.5 — comm_str without NUL uses full 16 bytes.
+    #[test]
+    fn comm_str_no_nul_uses_full_buffer() {
+        let buf = [b'A'; 16];
+        let ev = ev_with_comm(&buf);
+        assert_eq!(comm_str(&ev), "AAAAAAAAAAAAAAAA");
+    }
+
+    /// T-9.5 — invalid UTF-8 is replaced lossily, no panic.
+    #[test]
+    fn comm_str_lossy_on_invalid_utf8() {
+        let bytes = [0xFFu8, 0xFE, b'a', 0];
+        let ev = ev_with_comm(&bytes);
+        let s = comm_str(&ev);
+        assert!(s.contains('a'));
+        assert!(!s.contains('\0'));
+    }
+
+    /// T-9.8 — fuzz: arbitrary 16-byte comm content must never panic.
+    #[test]
+    fn comm_str_fuzz_never_panics() {
+        let mut state: u64 = 0xCAFE_BABE_DEAD_BEEF;
+        let mut next = || {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            state
+        };
+        for _ in 0..1000 {
+            let mut comm = [0u8; 16];
+            for b in &mut comm {
+                *b = next() as u8;
+            }
+            let mut ev = ev_with_comm(&[]);
+            ev.comm = comm;
+            let s = comm_str(&ev);
+            assert!(!s.contains('\0'));
+        }
+    }
+
+    // ── is_allowed ───────────────────────────────────────────────────
+
+    #[test]
+    fn is_allowed_empty_list_rejects_all() {
+        assert!(!is_allowed("anything", None, &[]));
+        assert!(!is_allowed("anything", Some("/usr/bin/anything"), &[]));
+    }
+
+    #[test]
+    fn is_allowed_exact_comm() {
+        let al = vec!["sshd".to_string()];
+        assert!(is_allowed("sshd", None, &al));
+        assert!(is_allowed("sshd-session", None, &al));
+        assert!(!is_allowed("ssh", None, &al));
+    }
+
+    #[test]
+    fn is_allowed_comm_prefix() {
+        let al = vec!["python".to_string()];
+        assert!(is_allowed("python3", None, &al));
+        assert!(is_allowed("python3.11", None, &al));
+        assert!(!is_allowed("py", None, &al));
+    }
+
+    #[test]
+    fn is_allowed_exact_exe_path() {
+        let al = vec!["/usr/bin/sudo".to_string()];
+        assert!(is_allowed("foo", Some("/usr/bin/sudo"), &al));
+        assert!(!is_allowed("foo", Some("/usr/local/sudo"), &al));
+    }
+
+    #[test]
+    fn is_allowed_exe_basename() {
+        let al = vec!["sudo".to_string()];
+        assert!(is_allowed("ssh-agent", Some("/usr/bin/sudo"), &al));
+    }
+
+    #[test]
+    fn is_allowed_regex_on_comm() {
+        let al = vec!["/^kworker/".to_string()];
+        assert!(is_allowed("kworker/0:1", None, &al));
+        assert!(is_allowed("kworker/u8:0-events", None, &al));
+        assert!(!is_allowed("worker", None, &al));
+    }
+
+    #[test]
+    fn is_allowed_regex_on_exe_basename() {
+        let al = vec!["/.*-agent$/".to_string()];
+        assert!(is_allowed("foo", Some("/usr/bin/ssh-agent"), &al));
+    }
+
+    #[test]
+    fn is_allowed_invalid_regex_does_not_panic() {
+        let al = vec!["/[unclosed/".to_string(), "actual-comm".to_string()];
+        assert!(is_allowed("actual-comm", None, &al));
+        assert!(!is_allowed("random", None, &al));
+    }
+
+    #[test]
+    fn is_allowed_mixed_entries() {
+        let al = vec![
+            "/^k/".to_string(),
+            "sudo".to_string(),
+            "/usr/bin/sshd".to_string(),
+        ];
+        assert!(is_allowed("kworker", None, &al));
+        assert!(is_allowed("sudo", None, &al));
+        assert!(is_allowed("any", Some("/usr/bin/sshd"), &al));
+        assert!(!is_allowed("apache", Some("/usr/sbin/apache2"), &al));
+    }
+}
