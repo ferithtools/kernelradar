@@ -23,12 +23,11 @@ const SUSPICIOUS_PORTS: &[u16] = &[
 pub struct NetworkDetector {
     bpf_obj_path: String,
     allowlist:    Vec<String>,
-    pub json:     bool,
 }
 
 impl NetworkDetector {
     pub fn new(bpf_obj_path: &str, allowlist: Vec<String>) -> Self {
-        Self { bpf_obj_path: bpf_obj_path.to_string(), allowlist, json: false }
+        Self { bpf_obj_path: bpf_obj_path.to_string(), allowlist }
     }
 
     pub async fn run(&self) -> Result<()> {
@@ -48,11 +47,9 @@ impl NetworkDetector {
             bpf.map_mut("kr_net_events").context("kr_net_events not found")?
         )?;
 
-        if !self.json {
-            println!("kernelradar network: watching connect() to public IPs");
-            println!("Allowlist: {:?}", self.allowlist);
-            println!("Press Ctrl+C to stop.\n");
-        }
+        tracing::info!(detector = "network",
+                        allowlist_size = self.allowlist.len(),
+                        "watching connect() to public IPs");
 
         loop {
             tokio::select! {
@@ -101,6 +98,6 @@ impl NetworkDetector {
             "exe":         exe,
         });
         let alert = make_alert(&ev_copy, exe.as_deref(), "network", &title, ctx);
-        print_alert(&alert, self.json);
+        print_alert(&alert, false);
     }
 }

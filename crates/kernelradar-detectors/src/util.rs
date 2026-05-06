@@ -2,10 +2,14 @@
 
 use std::sync::atomic::{AtomicU64, Ordering};
 use chrono::Utc;
+use uuid::Uuid;
 use kernelradar_core::{
     alert::Alert,
     event::{KrEvent, Severity},
 };
+
+use crate::output::{global_output_format, OutputFormat};
+use crate::metrics::record_alert;
 
 static ALERT_ID: AtomicU64 = AtomicU64::new(1);
 
@@ -18,17 +22,13 @@ pub fn read_exe_path(pid: u32) -> Option<String> {
 }
 
 /// Check whether a process is in the allowlist.
-/// Matches against comm (exact) or exe path (exact or suffix).
+/// Matches against comm (exact / prefix) or exe path (exact / basename).
 pub fn is_allowed(comm: &str, exe: Option<&str>, allowlist: &[String]) -> bool {
     for entry in allowlist {
-        // exact comm match
         if entry == comm { return true; }
-        // comm prefix — handles "runc:[1:CHILD]"
         if comm.starts_with(entry.as_str()) { return true; }
-        // exe path match
         if let Some(exe_path) = exe {
             if exe_path == entry.as_str() { return true; }
-            // basename match: "/usr/sbin/runc" matches "runc"
             if exe_path.rsplit('/').next() == Some(entry.as_str()) {
                 return true;
             }
@@ -54,32 +54,90 @@ pub fn make_alert(
     };
 
     Alert {
-        id:          ALERT_ID.fetch_add(1, Ordering::Relaxed),
-        timestamp:   Utc::now(),
-        severity:    sev,
-        detector:    detector.to_string(),
-        title:       title.to_string(),
-        description: exe.map(|e| format!("exe={e}"))
-                        .unwrap_or_default(),
-        pid:         ev.pid,
-        uid:         ev.uid,
+        id:             ALERT_ID.fetch_add(1, Ordering::Relaxed),
+        correlation_id: Uuid::now_v7(),
+        timestamp:      Utc::now(),
+        severity:       sev,
+        detector:       detector.to_string(),
+        title:          title.to_string(),
+        description:    exe.map(|e| format!("exe={e}")).unwrap_or_default(),
+        pid:            ev.pid,
+        uid:            ev.uid,
         comm,
         context,
     }
 }
 
-/// Print an alert — plain text or JSON depending on flag.
-pub fn print_alert(alert: &Alert, json: bool) {
-    if json {
-        println!("{}", serde_json::to_string(alert).unwrap_or_default());
-    } else {
-        println!("{alert}");
-        if !alert.description.is_empty() {
-            println!("          └ {}", alert.description);
-        }
-        if alert.context != serde_json::Value::Null {
-            println!("          └ {}", alert.context);
-        }
+/// Emit an alert through the configured output channel.
+///
+/// Per-process global format (set once at startup):
+///   Plain    — stdout, human-readable
+///   Json     — stdout, one JSON object per line
+///   Journald — tracing event with structured fields,
+///              consumed by tracing-journald layer
+pub fn print_alert(alert: &Alert, _legacy_json: bool) {
+    record_alert(&alert.detector, alert.severity);
+    match global_output_format() {
+        OutputFormat::Plain    => emit_plain(alert),
+        OutputFormat::Json     => emit_json(alert),
+        OutputFormat::Journald => emit_journald(alert),
+    }
+}
+
+fn emit_plain(alert: &Alert) {
+    println!("{alert}");
+    if !alert.description.is_empty() {
+        println!("          └ {}", alert.description);
+    }
+    if alert.context != serde_json::Value::Null {
+        println!("          └ {}", alert.context);
+    }
+}
+
+fn emit_json(alert: &Alert) {
+    if let Ok(s) = serde_json::to_string(alert) {
+        println!("{s}");
+    }
+}
+
+fn emit_journald(alert: &Alert) {
+    // tracing event — tracing-journald translates structured fields
+    // into journald custom fields (DETECTOR=, PID=, etc.) and the
+    // message string is the human-readable headline.
+    let level = match alert.severity {
+        Severity::Critical => tracing::Level::ERROR,
+        Severity::Alert    => tracing::Level::WARN,
+        Severity::Warning  => tracing::Level::WARN,
+        Severity::Info     => tracing::Level::INFO,
+    };
+
+    let comm        = alert.comm.as_str();
+    let detector    = alert.detector.as_str();
+    let title       = alert.title.as_str();
+    let description = alert.description.as_str();
+    let severity    = format!("{}", alert.severity);
+    let cid         = alert.correlation_id.to_string();
+    let context     = alert.context.to_string();
+
+    match level {
+        tracing::Level::ERROR => tracing::error!(
+            target: "kernelradar.alert",
+            detector, severity = %severity, pid = alert.pid, uid = alert.uid,
+            comm, correlation_id = %cid, context = %context, description,
+            "{title}"
+        ),
+        tracing::Level::WARN => tracing::warn!(
+            target: "kernelradar.alert",
+            detector, severity = %severity, pid = alert.pid, uid = alert.uid,
+            comm, correlation_id = %cid, context = %context, description,
+            "{title}"
+        ),
+        _ => tracing::info!(
+            target: "kernelradar.alert",
+            detector, severity = %severity, pid = alert.pid, uid = alert.uid,
+            comm, correlation_id = %cid, context = %context, description,
+            "{title}"
+        ),
     }
 }
 

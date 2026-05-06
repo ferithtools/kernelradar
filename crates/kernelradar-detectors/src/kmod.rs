@@ -9,12 +9,11 @@ use crate::util::{comm_str, is_allowed, make_alert, print_alert, read_exe_path};
 pub struct KmodDetector {
     bpf_obj_path: String,
     allowlist:    Vec<String>,
-    pub json:     bool,
 }
 
 impl KmodDetector {
     pub fn new(bpf_obj_path: &str, allowlist: Vec<String>) -> Self {
-        Self { bpf_obj_path: bpf_obj_path.to_string(), allowlist, json: false }
+        Self { bpf_obj_path: bpf_obj_path.to_string(), allowlist }
     }
 
     pub async fn run(&self) -> Result<()> {
@@ -40,11 +39,9 @@ impl KmodDetector {
             bpf.map_mut("kr_kmod_events").context("kr_kmod_events not found")?
         )?;
 
-        if !self.json {
-            println!("kernelradar kmod: watching finit_module() + init_module()");
-            println!("Allowlist: {:?}", self.allowlist);
-            println!("Press Ctrl+C to stop.\n");
-        }
+        tracing::info!(detector = "kmod",
+                        allowlist_size = self.allowlist.len(),
+                        "watching finit_module() + init_module()");
 
         loop {
             tokio::select! {
@@ -81,6 +78,6 @@ impl KmodDetector {
         };
 
         let alert = make_alert(ev, exe.as_deref(), "kmod", &title, ctx);
-        print_alert(&alert, self.json);
+        print_alert(&alert, false);
     }
 }

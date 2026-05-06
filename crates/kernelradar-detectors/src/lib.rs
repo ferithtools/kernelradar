@@ -4,6 +4,8 @@ pub mod cred;
 pub mod fim;
 pub mod injection;
 pub mod kmod;
+pub mod metrics;
 pub mod network;
+pub mod output;
 pub mod privesc;
 pub mod util;

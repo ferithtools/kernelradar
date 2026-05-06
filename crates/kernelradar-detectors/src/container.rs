@@ -29,12 +29,11 @@ fn decode_ns_flags(flags: u64) -> String {
 pub struct ContainerDetector {
     bpf_obj_path: String,
     allowlist:    Vec<String>,
-    pub json:     bool,
 }
 
 impl ContainerDetector {
     pub fn new(bpf_obj_path: &str, allowlist: Vec<String>) -> Self {
-        Self { bpf_obj_path: bpf_obj_path.to_string(), allowlist, json: false }
+        Self { bpf_obj_path: bpf_obj_path.to_string(), allowlist }
     }
 
     pub async fn run(&self) -> Result<()> {
@@ -61,11 +60,9 @@ impl ContainerDetector {
                .context("kr_container_events not found")?
         )?;
 
-        if !self.json {
-            println!("kernelradar container: watching unshare() + setns()");
-            println!("Allowlist: {:?}", self.allowlist);
-            println!("Press Ctrl+C to stop.\n");
-        }
+        tracing::info!(detector = "container",
+                        allowlist_size = self.allowlist.len(),
+                        "watching unshare() + setns()");
 
         loop {
             tokio::select! {
@@ -108,6 +105,6 @@ impl ContainerDetector {
         };
 
         let alert = make_alert(ev, exe.as_deref(), "container", &title, ctx);
-        print_alert(&alert, self.json);
+        print_alert(&alert, false);
     }
 }

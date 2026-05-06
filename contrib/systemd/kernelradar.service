@@ -8,7 +8,8 @@ ConditionKernelVersion=>=6.1
 Type=simple
 ExecStart=/usr/local/bin/kernelradar daemon \
     --bpf-dir /var/lib/kernelradar/bpf \
-    --json
+    --format=journald
+Environment=RUST_LOG=kernelradar=info,kernelradar.alert=info,kernelradar.summary=info
 Restart=on-failure
 RestartSec=5
 

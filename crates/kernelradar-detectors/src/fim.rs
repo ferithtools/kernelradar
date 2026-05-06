@@ -70,12 +70,11 @@ fn match_path(path: &str) -> Option<&'static FimRule> {
 pub struct FimDetector {
     bpf_obj_path: String,
     allowlist:    Vec<String>,
-    pub json:     bool,
 }
 
 impl FimDetector {
     pub fn new(bpf_obj_path: &str, allowlist: Vec<String>) -> Self {
-        Self { bpf_obj_path: bpf_obj_path.to_string(), allowlist, json: false }
+        Self { bpf_obj_path: bpf_obj_path.to_string(), allowlist }
     }
 
     pub async fn run(&self) -> Result<()> {
@@ -95,11 +94,9 @@ impl FimDetector {
             bpf.map_mut("kr_fim_events").context("kr_fim_events not found")?
         )?;
 
-        if !self.json {
-            println!("kernelradar fim: watching writes to /etc, /root, /home/*/.ssh");
-            println!("Allowlist: {:?}", self.allowlist);
-            println!("Press Ctrl+C to stop.\n");
-        }
+        tracing::info!(detector = "fim",
+                        allowlist_size = self.allowlist.len(),
+                        "watching writes to /etc, /root, /home/*/.ssh");
 
         loop {
             tokio::select! {
@@ -148,6 +145,6 @@ impl FimDetector {
             "exe":     exe,
         });
         let alert = make_alert(&ev_copy, exe.as_deref(), "fim", &title, ctx);
-        print_alert(&alert, self.json);
+        print_alert(&alert, false);
     }
 }

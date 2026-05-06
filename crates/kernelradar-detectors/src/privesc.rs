@@ -9,12 +9,11 @@ use crate::util::{comm_str, is_allowed, make_alert, print_alert, read_exe_path};
 pub struct PrivEscDetector {
     bpf_obj_path: String,
     allowlist:    Vec<String>,
-    pub json:     bool,
 }
 
 impl PrivEscDetector {
     pub fn new(bpf_obj_path: &str, allowlist: Vec<String>) -> Self {
-        Self { bpf_obj_path: bpf_obj_path.to_string(), allowlist, json: false }
+        Self { bpf_obj_path: bpf_obj_path.to_string(), allowlist }
     }
 
     pub async fn run(&self) -> Result<()> {
@@ -42,11 +41,9 @@ impl PrivEscDetector {
             bpf.map_mut("kr_events").context("kr_events not found")?
         )?;
 
-        if !self.json {
-            println!("kernelradar privesc: watching setuid/setgid → root");
-            println!("Allowlist: {:?}", self.allowlist);
-            println!("Press Ctrl+C to stop.\n");
-        }
+        tracing::info!(detector = "privesc",
+                        allowlist_size = self.allowlist.len(),
+                        "watching setuid/setgid → root");
 
         loop {
             tokio::select! {
@@ -82,6 +79,6 @@ impl PrivEscDetector {
             "exe":     exe,
         });
         let alert = make_alert(ev, exe.as_deref(), "privesc", &title, ctx);
-        print_alert(&alert, self.json);
+        print_alert(&alert, false);
     }
 }

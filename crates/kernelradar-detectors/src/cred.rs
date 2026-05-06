@@ -69,12 +69,11 @@ fn match_cred(path: &str) -> Option<&'static CredRule> {
 pub struct CredDetector {
     bpf_obj_path: String,
     allowlist:    Vec<String>,
-    pub json:     bool,
 }
 
 impl CredDetector {
     pub fn new(bpf_obj_path: &str, allowlist: Vec<String>) -> Self {
-        Self { bpf_obj_path: bpf_obj_path.to_string(), allowlist, json: false }
+        Self { bpf_obj_path: bpf_obj_path.to_string(), allowlist }
     }
 
     pub async fn run(&self) -> Result<()> {
@@ -96,11 +95,9 @@ impl CredDetector {
             bpf.map_mut("kr_cred_events").context("kr_cred_events not found")?
         )?;
 
-        if !self.json {
-            println!("kernelradar cred: watching reads of credential files");
-            println!("Allowlist: {:?}", self.allowlist);
-            println!("Press Ctrl+C to stop.\n");
-        }
+        tracing::info!(detector = "cred",
+                        allowlist_size = self.allowlist.len(),
+                        "watching reads of credential files");
 
         loop {
             tokio::select! {
@@ -145,6 +142,6 @@ impl CredDetector {
             "exe":   exe,
         });
         let alert = make_alert(&ev_copy, exe.as_deref(), "cred", &title, ctx);
-        print_alert(&alert, self.json);
+        print_alert(&alert, false);
     }
 }

@@ -32,6 +32,10 @@ clap = { version = "4", features = ["derive"] }
 # Logging
 tracing            = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+tracing-journald   = "0.3"
+
+# UUID v7 for correlation IDs (timestamp-prefixed)
+uuid = { version = "1", features = ["v7", "serde"] }
 
 # Errors
 anyhow  = "1"

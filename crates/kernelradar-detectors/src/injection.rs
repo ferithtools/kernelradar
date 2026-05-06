@@ -29,12 +29,11 @@ fn ptrace_request_name(req: u64) -> &'static str {
 pub struct InjectionDetector {
     bpf_obj_path: String,
     allowlist:    Vec<String>,
-    pub json:     bool,
 }
 
 impl InjectionDetector {
     pub fn new(bpf_obj_path: &str, allowlist: Vec<String>) -> Self {
-        Self { bpf_obj_path: bpf_obj_path.to_string(), allowlist, json: false }
+        Self { bpf_obj_path: bpf_obj_path.to_string(), allowlist }
     }
 
     pub async fn run(&self) -> Result<()> {
@@ -60,11 +59,9 @@ impl InjectionDetector {
             bpf.map_mut("kr_inj_events").context("kr_inj_events not found")?
         )?;
 
-        if !self.json {
-            println!("kernelradar injection: watching ptrace() + process_vm_writev()");
-            println!("Allowlist: {:?}", self.allowlist);
-            println!("Press Ctrl+C to stop.\n");
-        }
+        tracing::info!(detector = "injection",
+                        allowlist_size = self.allowlist.len(),
+                        "watching ptrace() + process_vm_writev()");
 
         loop {
             tokio::select! {
@@ -134,6 +131,6 @@ impl InjectionDetector {
         };
 
         let alert = make_alert(ev, exe.as_deref(), "injection", &title, ctx);
-        print_alert(&alert, self.json);
+        print_alert(&alert, false);
     }
 }

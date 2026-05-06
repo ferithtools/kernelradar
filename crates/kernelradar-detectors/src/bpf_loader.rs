@@ -23,12 +23,11 @@ fn prog_type_name(t: u32) -> &'static str {
 pub struct BpfLoaderDetector {
     bpf_obj_path: String,
     allowlist:    Vec<String>,
-    pub json:     bool,
 }
 
 impl BpfLoaderDetector {
     pub fn new(bpf_obj_path: &str, allowlist: Vec<String>) -> Self {
-        Self { bpf_obj_path: bpf_obj_path.to_string(), allowlist, json: false }
+        Self { bpf_obj_path: bpf_obj_path.to_string(), allowlist }
     }
 
     pub async fn run(&self) -> Result<()> {
@@ -48,11 +47,9 @@ impl BpfLoaderDetector {
             bpf.map_mut("kr_bpfl_events").context("kr_bpfl_events not found")?
         )?;
 
-        if !self.json {
-            println!("kernelradar bpf-loader: watching BPF_PROG_LOAD");
-            println!("Allowlist: {:?}", self.allowlist);
-            println!("Press Ctrl+C to stop.\n");
-        }
+        tracing::info!(detector = "bpf-loader",
+                        allowlist_size = self.allowlist.len(),
+                        "watching BPF_PROG_LOAD");
 
         loop {
             tokio::select! {
@@ -83,6 +80,6 @@ impl BpfLoaderDetector {
             "exe":       exe,
         });
         let alert = make_alert(ev, exe.as_deref(), "bpf-loader", &title, ctx);
-        print_alert(&alert, self.json);
+        print_alert(&alert, false);
     }
 }
