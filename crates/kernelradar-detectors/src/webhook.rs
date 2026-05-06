@@ -9,7 +9,6 @@
 /// Async fire-and-forget: each alert spawns a non-blocking POST.
 /// On failure: log and drop. We never let an HTTP backend slow down
 /// the kernel hot path.
-
 use std::sync::OnceLock;
 use std::time::Duration;
 
@@ -17,11 +16,11 @@ use kernelradar_core::alert::Alert;
 
 #[derive(Debug, Clone)]
 pub struct WebhookConfig {
-    pub enabled:       bool,
-    pub url:           String,
-    pub timeout_secs:  u64,
+    pub enabled: bool,
+    pub url: String,
+    pub timeout_secs: u64,
     /// Optional bearer token / shared secret in `Authorization: Bearer <X>`.
-    pub auth_token:    Option<String>,
+    pub auth_token: Option<String>,
     /// If true, only forward Severity ≥ Alert. Otherwise forward all.
     pub severity_filter_alert_or_higher: bool,
 }
@@ -29,10 +28,10 @@ pub struct WebhookConfig {
 impl Default for WebhookConfig {
     fn default() -> Self {
         Self {
-            enabled:       false,
-            url:           String::new(),
-            timeout_secs:  3,
-            auth_token:    None,
+            enabled: false,
+            url: String::new(),
+            timeout_secs: 3,
+            auth_token: None,
             severity_filter_alert_or_higher: false,
         }
     }
@@ -56,11 +55,18 @@ pub fn init(config: WebhookConfig) {
 
 /// Submit an alert to the configured webhook (no-op if disabled).
 pub fn submit(alert: &Alert) {
-    let cfg = match CONFIG.get() { Some(c) => c, None => return };
-    let client = match CLIENT.get() { Some(c) => c, None => return };
+    let cfg = match CONFIG.get() {
+        Some(c) => c,
+        None => return,
+    };
+    let client = match CLIENT.get() {
+        Some(c) => c,
+        None => return,
+    };
 
     if cfg.severity_filter_alert_or_higher
-       && (alert.severity as u8) < (kernelradar_core::event::Severity::Alert as u8) {
+        && (alert.severity as u8) < (kernelradar_core::event::Severity::Alert as u8)
+    {
         return;
     }
 
@@ -73,7 +79,8 @@ pub fn submit(alert: &Alert) {
     let client = client.clone();
 
     tokio::spawn(async move {
-        let mut req = client.post(&url)
+        let mut req = client
+            .post(&url)
             .header(reqwest::header::CONTENT_TYPE, "application/json")
             .body(payload);
         if let Some(t) = auth {

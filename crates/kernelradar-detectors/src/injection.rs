@@ -11,23 +11,22 @@
 ///
 /// Default allowlist includes well-known debuggers (gdb, lldb, strace)
 /// and tracing tools so legitimate development isn't flagged.
-
 use anyhow::{Context, Result};
 use aya::{maps::RingBuf, programs::TracePoint, Ebpf};
 use std::path::Path;
 use tokio::signal;
 
-use kernelradar_core::event::KrEvent;
 use crate::allowlist::SharedAllowlist;
 use crate::integrity::verify as verify_bpf;
 use crate::util::{comm_str, is_allowed, make_alert, print_alert, read_exe_path};
+use kernelradar_core::event::KrEvent;
 
 /// ptrace request → human-readable name
 fn ptrace_request_name(req: u64) -> &'static str {
     match req {
-        4  => "PTRACE_POKETEXT",
-        5  => "PTRACE_POKEDATA",
-        6  => "PTRACE_POKEUSER",
+        4 => "PTRACE_POKETEXT",
+        5 => "PTRACE_POKEDATA",
+        6 => "PTRACE_POKEUSER",
         16 => "PTRACE_ATTACH",
         0x4206 => "PTRACE_SEIZE",
         _ => "PTRACE_OTHER",
@@ -36,12 +35,15 @@ fn ptrace_request_name(req: u64) -> &'static str {
 
 pub struct InjectionDetector {
     bpf_obj_path: String,
-    allowlist:    SharedAllowlist,
+    allowlist: SharedAllowlist,
 }
 
 impl InjectionDetector {
     pub fn new(bpf_obj_path: &str, allowlist: SharedAllowlist) -> Self {
-        Self { bpf_obj_path: bpf_obj_path.to_string(), allowlist }
+        Self {
+            bpf_obj_path: bpf_obj_path.to_string(),
+            allowlist,
+        }
     }
 
     pub async fn run(&self) -> Result<()> {
@@ -50,15 +52,13 @@ impl InjectionDetector {
 
         let bytes = std::fs::read(path)?;
         verify_bpf("injection", &bytes);
-        let mut bpf = Ebpf::load(&bytes)
-            .context("verifier rejected injection BPF")?;
+        let mut bpf = Ebpf::load(&bytes).context("verifier rejected injection BPF")?;
 
         for (name, tp) in [
-            ("kr_tp_ptrace",      "sys_enter_ptrace"),
-            ("kr_tp_pvm_writev",  "sys_enter_process_vm_writev"),
+            ("kr_tp_ptrace", "sys_enter_ptrace"),
+            ("kr_tp_pvm_writev", "sys_enter_process_vm_writev"),
         ] {
-            let prog: &mut TracePoint = bpf
-                .program_mut(name).context(name)?.try_into()?;
+            let prog: &mut TracePoint = bpf.program_mut(name).context(name)?.try_into()?;
             prog.load()?;
             prog.attach("syscalls", tp)
                 .with_context(|| format!("attach {tp}"))?;
@@ -66,12 +66,15 @@ impl InjectionDetector {
         }
 
         let mut ring: RingBuf<_> = RingBuf::try_from(
-            bpf.map_mut("kr_inj_events").context("kr_inj_events not found")?
+            bpf.map_mut("kr_inj_events")
+                .context("kr_inj_events not found")?,
         )?;
 
-        tracing::info!(detector = "injection",
-                        allowlist_size = self.allowlist.snapshot().len(),
-                        "watching ptrace() + process_vm_writev()");
+        tracing::info!(
+            detector = "injection",
+            allowlist_size = self.allowlist.snapshot().len(),
+            "watching ptrace() + process_vm_writev()"
+        );
 
         loop {
             tokio::select! {
@@ -92,9 +95,11 @@ impl InjectionDetector {
 
     fn handle(&self, ev: &KrEvent) {
         let comm = comm_str(ev);
-        let exe  = read_exe_path(ev.pid);
-        let al   = self.allowlist.snapshot();
-        if is_allowed(&comm, exe.as_deref(), &al) { return; }
+        let exe = read_exe_path(ev.pid);
+        let al = self.allowlist.snapshot();
+        if is_allowed(&comm, exe.as_deref(), &al) {
+            return;
+        }
 
         let (title, ctx) = match ev.event_type {
             1 => {

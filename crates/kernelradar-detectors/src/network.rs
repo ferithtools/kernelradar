@@ -10,18 +10,17 @@
 /// BPF filters out loopback, RFC1918, link-local, CGNAT, multicast.
 /// Userspace adds severity rules for ports commonly used by
 /// reverse shells (4444, 4445, 5555, 6666, 6667, 1337, 31337).
-
 use anyhow::{Context, Result};
 use aya::{maps::RingBuf, programs::TracePoint, Ebpf};
 use std::net::Ipv4Addr;
 use std::path::Path;
 use tokio::signal;
 
-use kernelradar_core::event::KrEvent;
 use crate::allowlist::SharedAllowlist;
 use crate::cidr::SharedCidrList;
 use crate::integrity::verify as verify_bpf;
 use crate::util::{comm_str, is_allowed, make_alert, print_alert, read_exe_path};
+use kernelradar_core::event::KrEvent;
 
 /// Ports often associated with reverse shells / C2.
 /// A connect() to one of these → severity bumped to ALERT.
@@ -31,18 +30,14 @@ const SUSPICIOUS_PORTS: &[u16] = &[
 
 pub struct NetworkDetector {
     bpf_obj_path: String,
-    allowlist:    SharedAllowlist,
+    allowlist: SharedAllowlist,
     /// Destination CIDR allowlist (F-1). Connections to addresses inside
     /// any listed CIDR are suppressed before process-allowlist evaluation.
-    cidrs:        SharedCidrList,
+    cidrs: SharedCidrList,
 }
 
 impl NetworkDetector {
-    pub fn new(
-        bpf_obj_path: &str,
-        allowlist:    SharedAllowlist,
-        cidrs:        SharedCidrList,
-    ) -> Self {
+    pub fn new(bpf_obj_path: &str, allowlist: SharedAllowlist, cidrs: SharedCidrList) -> Self {
         Self {
             bpf_obj_path: bpf_obj_path.to_string(),
             allowlist,
@@ -56,23 +51,27 @@ impl NetworkDetector {
 
         let bytes = std::fs::read(path)?;
         verify_bpf("network", &bytes);
-        let mut bpf = Ebpf::load(&bytes)
-            .context("verifier rejected network BPF")?;
+        let mut bpf = Ebpf::load(&bytes).context("verifier rejected network BPF")?;
 
         let tp: &mut TracePoint = bpf
-            .program_mut("kr_tp_connect").context("kr_tp_connect")?.try_into()?;
+            .program_mut("kr_tp_connect")
+            .context("kr_tp_connect")?
+            .try_into()?;
         tp.load()?;
         tp.attach("syscalls", "sys_enter_connect")?;
         tracing::info!("attached tracepoint: syscalls/sys_enter_connect");
 
         let mut ring: RingBuf<_> = RingBuf::try_from(
-            bpf.map_mut("kr_net_events").context("kr_net_events not found")?
+            bpf.map_mut("kr_net_events")
+                .context("kr_net_events not found")?,
         )?;
 
-        tracing::info!(detector = "network",
-                        allowlist_size = self.allowlist.snapshot().len(),
-                        cidr_allowlist_size = self.cidrs.len(),
-                        "watching connect() to public IPs");
+        tracing::info!(
+            detector = "network",
+            allowlist_size = self.allowlist.snapshot().len(),
+            cidr_allowlist_size = self.cidrs.len(),
+            "watching connect() to public IPs"
+        );
 
         loop {
             tokio::select! {
@@ -97,19 +96,23 @@ impl NetworkDetector {
         let port_be = (ev.data[0] & 0xffff) as u16;
         let addr_be = (ev.data[1] & 0xffffffff) as u32;
 
-        let port    = u16::from_be(port_be);
+        let port = u16::from_be(port_be);
         let ip_host = u32::from_be(addr_be);
-        let ip      = Ipv4Addr::from(ip_host);
+        let ip = Ipv4Addr::from(ip_host);
 
         // F-1: destination CIDR allowlist short-circuits before process
         // attribution — saves the /proc/<pid>/exe read for whitelisted
         // destinations on busy hosts (Telegram heartbeats, etc.).
-        if self.cidrs.contains(ip_host) { return; }
+        if self.cidrs.contains(ip_host) {
+            return;
+        }
 
         let comm = comm_str(ev);
-        let exe  = read_exe_path(ev.pid);
-        let al   = self.allowlist.snapshot();
-        if is_allowed(&comm, exe.as_deref(), &al) { return; }
+        let exe = read_exe_path(ev.pid);
+        let al = self.allowlist.snapshot();
+        if is_allowed(&comm, exe.as_deref(), &al) {
+            return;
+        }
 
         let suspicious = SUSPICIOUS_PORTS.contains(&port);
         let mut ev_copy = ev.clone();
@@ -119,7 +122,11 @@ impl NetworkDetector {
 
         let title = format!(
             "connect → {ip}:{port} by {comm}{}",
-            if suspicious { "  ⚠ SUSPICIOUS PORT" } else { "" }
+            if suspicious {
+                "  ⚠ SUSPICIOUS PORT"
+            } else {
+                ""
+            }
         );
         let ctx = serde_json::json!({
             "remote_ip":   ip.to_string(),

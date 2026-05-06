@@ -5,7 +5,6 @@
 // See LICENSE for terms.
 
 /// Alert counters + hourly summary (T-1.7 + T-3.2).
-
 use std::collections::BTreeMap;
 use std::sync::Mutex;
 use std::sync::OnceLock;
@@ -20,11 +19,11 @@ struct Counters {
     /// (detector, severity) → count since last summary
     bucket_emitted: BTreeMap<(String, Severity), u64>,
     /// (detector, severity) → cumulative since process start
-    total_emitted:  BTreeMap<(String, Severity), u64>,
+    total_emitted: BTreeMap<(String, Severity), u64>,
     /// (detector, severity) → suppressed since last summary
     bucket_suppressed: BTreeMap<(String, Severity), u64>,
     /// (detector) → burst count cumulative
-    total_bursts:   BTreeMap<String, u64>,
+    total_bursts: BTreeMap<String, u64>,
     /// (detector) → anomaly count cumulative (T-4)
     total_anomalies: BTreeMap<String, u64>,
 }
@@ -39,7 +38,7 @@ pub fn record_alert(detector: &str, severity: Severity) {
     if let Ok(mut c) = counters().lock() {
         let key = (detector.to_string(), severity);
         *c.bucket_emitted.entry(key.clone()).or_insert(0) += 1;
-        *c.total_emitted .entry(key)        .or_insert(0) += 1;
+        *c.total_emitted.entry(key).or_insert(0) += 1;
     }
 }
 
@@ -78,8 +77,8 @@ fn emit_summary() {
     // Drain emitted bucket
     let (emitted, suppressed_internal) = {
         let mut c = counters().lock().unwrap();
-        let emitted   = std::mem::take(&mut c.bucket_emitted);
-        let supp_int  = std::mem::take(&mut c.bucket_suppressed);
+        let emitted = std::mem::take(&mut c.bucket_emitted);
+        let supp_int = std::mem::take(&mut c.bucket_suppressed);
         (emitted, supp_int)
     };
 
@@ -126,13 +125,22 @@ fn emit_summary() {
 
 /// Cumulative totals + bursts for `kernelradar status`.
 pub fn cumulative_totals() -> BTreeMap<(String, Severity), u64> {
-    counters().lock().map(|c| c.total_emitted.clone()).unwrap_or_default()
+    counters()
+        .lock()
+        .map(|c| c.total_emitted.clone())
+        .unwrap_or_default()
 }
 
 pub fn cumulative_bursts() -> BTreeMap<String, u64> {
-    counters().lock().map(|c| c.total_bursts.clone()).unwrap_or_default()
+    counters()
+        .lock()
+        .map(|c| c.total_bursts.clone())
+        .unwrap_or_default()
 }
 
 pub fn cumulative_anomalies() -> BTreeMap<String, u64> {
-    counters().lock().map(|c| c.total_anomalies.clone()).unwrap_or_default()
+    counters()
+        .lock()
+        .map(|c| c.total_anomalies.clone())
+        .unwrap_or_default()
 }

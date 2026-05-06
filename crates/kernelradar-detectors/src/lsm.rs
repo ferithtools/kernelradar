@@ -14,7 +14,6 @@
 /// All three are OFF by default. Enable with explicit config opt-in.
 /// On enabled-but-failed-load we LOG the error and continue running
 /// in observe-only mode — never abort the daemon.
-
 use anyhow::{Context, Result};
 use aya::{
     maps::{Array, HashMap, MapData},
@@ -26,33 +25,36 @@ use std::sync::OnceLock;
 
 #[derive(Debug, Clone)]
 pub struct EnforcementConfig {
-    pub selfprotect_enabled:    bool,
-    pub bpf_enforce_enabled:    bool,
-    pub kmod_enforce_enabled:   bool,
+    pub selfprotect_enabled: bool,
+    pub bpf_enforce_enabled: bool,
+    pub kmod_enforce_enabled: bool,
 
-    pub selfprotect_obj_path:   String,
-    pub bpf_enforce_obj_path:   String,
-    pub kmod_enforce_obj_path:  String,
+    pub selfprotect_obj_path: String,
+    pub bpf_enforce_obj_path: String,
+    pub kmod_enforce_obj_path: String,
 
     /// Comm strings allowed to load BPF programs (T-0.9 enforcement).
-    pub bpf_allowlist:    Vec<String>,
+    pub bpf_allowlist: Vec<String>,
     /// Comm strings allowed to load kernel modules.
-    pub kmod_allowlist:   Vec<String>,
+    pub kmod_allowlist: Vec<String>,
 }
 
 impl Default for EnforcementConfig {
     fn default() -> Self {
         Self {
-            selfprotect_enabled:  false,
-            bpf_enforce_enabled:  false,
+            selfprotect_enabled: false,
+            bpf_enforce_enabled: false,
             kmod_enforce_enabled: false,
             selfprotect_obj_path: "/var/lib/kernelradar/bpf/selfprotect.bpf.o".into(),
             bpf_enforce_obj_path: "/var/lib/kernelradar/bpf/enforce_bpf.bpf.o".into(),
-            kmod_enforce_obj_path:"/var/lib/kernelradar/bpf/enforce_kmod.bpf.o".into(),
-            bpf_allowlist:  vec!["bpftrace".into(), "falco".into(),
-                                  "kernelradar".into()],
-            kmod_allowlist: vec!["modprobe".into(), "kmod".into(),
-                                  "insmod".into(), "systemd-udevd".into()],
+            kmod_enforce_obj_path: "/var/lib/kernelradar/bpf/enforce_kmod.bpf.o".into(),
+            bpf_allowlist: vec!["bpftrace".into(), "falco".into(), "kernelradar".into()],
+            kmod_allowlist: vec![
+                "modprobe".into(),
+                "kmod".into(),
+                "insmod".into(),
+                "systemd-udevd".into(),
+            ],
         }
     }
 }
@@ -60,8 +62,8 @@ impl Default for EnforcementConfig {
 /// Holds the loaded Ebpf instances so they aren't dropped while the
 /// daemon runs. We keep them in a global OnceLock to keep ownership.
 struct LoadedLsm {
-    _selfprotect:  Option<Ebpf>,
-    _bpf_enforce:  Option<Ebpf>,
+    _selfprotect: Option<Ebpf>,
+    _bpf_enforce: Option<Ebpf>,
     _kmod_enforce: Option<Ebpf>,
 }
 
@@ -71,8 +73,8 @@ static LOADED: OnceLock<std::sync::Mutex<Option<LoadedLsm>>> = OnceLock::new();
 /// are logged but never propagate, so the daemon keeps running.
 pub fn install(cfg: &EnforcementConfig) {
     let mut state = LoadedLsm {
-        _selfprotect:  None,
-        _bpf_enforce:  None,
+        _selfprotect: None,
+        _bpf_enforce: None,
         _kmod_enforce: None,
     };
 
@@ -87,8 +89,10 @@ pub fn install(cfg: &EnforcementConfig) {
     if cfg.selfprotect_enabled {
         match load_selfprotect(&cfg.selfprotect_obj_path, &btf) {
             Ok(b) => {
-                tracing::warn!("T-6.4 self-protection ENABLED: \
-                                 kernelradar PID is unkillable except by systemd");
+                tracing::warn!(
+                    "T-6.4 self-protection ENABLED: \
+                                 kernelradar PID is unkillable except by systemd"
+                );
                 state._selfprotect = Some(b);
             }
             Err(e) => tracing::error!("T-6.4: failed to load selfprotect: {e}"),
@@ -96,11 +100,12 @@ pub fn install(cfg: &EnforcementConfig) {
     }
 
     if cfg.bpf_enforce_enabled {
-        match load_bpf_enforce(&cfg.bpf_enforce_obj_path, &btf,
-                                &cfg.bpf_allowlist) {
+        match load_bpf_enforce(&cfg.bpf_enforce_obj_path, &btf, &cfg.bpf_allowlist) {
             Ok(b) => {
-                tracing::warn!("T-0.9 bpf-loader ENFORCEMENT ENABLED: \
-                                 BPF_PROG_LOAD denied for non-allowlisted procs");
+                tracing::warn!(
+                    "T-0.9 bpf-loader ENFORCEMENT ENABLED: \
+                                 BPF_PROG_LOAD denied for non-allowlisted procs"
+                );
                 state._bpf_enforce = Some(b);
             }
             Err(e) => tracing::error!("T-0.9: failed to load enforce_bpf: {e}"),
@@ -108,11 +113,12 @@ pub fn install(cfg: &EnforcementConfig) {
     }
 
     if cfg.kmod_enforce_enabled {
-        match load_kmod_enforce(&cfg.kmod_enforce_obj_path, &btf,
-                                 &cfg.kmod_allowlist) {
+        match load_kmod_enforce(&cfg.kmod_enforce_obj_path, &btf, &cfg.kmod_allowlist) {
             Ok(b) => {
-                tracing::warn!("T-0.9 kmod ENFORCEMENT ENABLED: \
-                                 kernel_read_file(MODULE) denied for non-allowlisted");
+                tracing::warn!(
+                    "T-0.9 kmod ENFORCEMENT ENABLED: \
+                                 kernel_read_file(MODULE) denied for non-allowlisted"
+                );
                 state._kmod_enforce = Some(b);
             }
             Err(e) => tracing::error!("T-0.9: failed to load enforce_kmod: {e}"),
@@ -124,13 +130,10 @@ pub fn install(cfg: &EnforcementConfig) {
 }
 
 fn load_lsm(path: &str, btf: &Btf, prog_name: &'static str) -> Result<Ebpf> {
-    let bytes = std::fs::read(Path::new(path))
-        .with_context(|| format!("read {path}"))?;
+    let bytes = std::fs::read(Path::new(path)).with_context(|| format!("read {path}"))?;
     let mut bpf = Ebpf::load(&bytes).context("verifier rejected LSM program")?;
 
-    let prog: &mut Lsm = bpf
-        .program_mut(prog_name).context(prog_name)?
-        .try_into()?;
+    let prog: &mut Lsm = bpf.program_mut(prog_name).context(prog_name)?.try_into()?;
     prog.load(prog_name, btf).context("Lsm::load")?;
     prog.attach().context("Lsm::attach")?;
     Ok(bpf)
@@ -142,7 +145,8 @@ fn load_selfprotect(path: &str, btf: &Btf) -> Result<Ebpf> {
     // Populate the protected TGID with our own pid (since this process
     // is the BPF orchestrator, our tgid equals the daemon's tgid).
     let tgid = std::process::id();
-    let map = bpf.take_map("kr_protected_tgid")
+    let map = bpf
+        .take_map("kr_protected_tgid")
         .context("kr_protected_tgid map missing")?;
     let mut arr: Array<MapData, u32> = Array::try_from(map)?;
     arr.set(0, &tgid, 0)?;
@@ -153,7 +157,8 @@ fn load_selfprotect(path: &str, btf: &Btf) -> Result<Ebpf> {
 fn load_bpf_enforce(path: &str, btf: &Btf, allowlist: &[String]) -> Result<Ebpf> {
     let mut bpf = load_lsm(path, btf, "kr_bpf_enforce")?;
 
-    let map = bpf.take_map("kr_bpf_allowed")
+    let map = bpf
+        .take_map("kr_bpf_allowed")
         .context("kr_bpf_allowed map missing")?;
     let mut hm: HashMap<MapData, [u8; 16], u8> = HashMap::try_from(map)?;
     for entry in allowlist {
@@ -169,7 +174,8 @@ fn load_bpf_enforce(path: &str, btf: &Btf, allowlist: &[String]) -> Result<Ebpf>
 fn load_kmod_enforce(path: &str, btf: &Btf, allowlist: &[String]) -> Result<Ebpf> {
     let mut bpf = load_lsm(path, btf, "kr_kmod_enforce")?;
 
-    let map = bpf.take_map("kr_kmod_allowed")
+    let map = bpf
+        .take_map("kr_kmod_allowed")
         .context("kr_kmod_allowed map missing")?;
     let mut hm: HashMap<MapData, [u8; 16], u8> = HashMap::try_from(map)?;
     for entry in allowlist {

@@ -11,11 +11,15 @@
 /// • Journald — tracing events with structured fields
 /// • Falco    — Falco-compatible JSON schema, one object per line
 ///              (see https://falco.org/docs/outputs/formatting/)
-
 use std::sync::OnceLock;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum OutputFormat { Plain, Json, Journald, Falco }
+pub enum OutputFormat {
+    Plain,
+    Json,
+    Journald,
+    Falco,
+}
 
 static OUTPUT_FORMAT: OnceLock<OutputFormat> = OnceLock::new();
 
@@ -28,8 +32,7 @@ pub fn global_output_format() -> OutputFormat {
 }
 
 pub fn detect_systemd_environment() -> bool {
-    std::env::var_os("JOURNAL_STREAM").is_some()
-        || std::env::var_os("INVOCATION_ID").is_some()
+    std::env::var_os("JOURNAL_STREAM").is_some() || std::env::var_os("INVOCATION_ID").is_some()
 }
 
 /// Translate a kernelradar Alert into a Falco-compatible JSON object.
@@ -46,9 +49,9 @@ pub fn detect_systemd_environment() -> bool {
 pub fn alert_to_falco_json(alert: &kernelradar_core::alert::Alert) -> String {
     let priority = match alert.severity {
         kernelradar_core::event::Severity::Critical => "Critical",
-        kernelradar_core::event::Severity::Alert    => "Error",
-        kernelradar_core::event::Severity::Warning  => "Warning",
-        kernelradar_core::event::Severity::Info     => "Informational",
+        kernelradar_core::event::Severity::Alert => "Error",
+        kernelradar_core::event::Severity::Warning => "Warning",
+        kernelradar_core::event::Severity::Info => "Informational",
     };
 
     let hostname = std::fs::read_to_string("/etc/hostname")
@@ -58,13 +61,21 @@ pub fn alert_to_falco_json(alert: &kernelradar_core::alert::Alert) -> String {
 
     // Build output_fields with Falco-conventional names + our custom ones
     let mut fields = serde_json::Map::new();
-    fields.insert("proc.pid".into(),  serde_json::json!(alert.pid));
+    fields.insert("proc.pid".into(), serde_json::json!(alert.pid));
     fields.insert("proc.name".into(), serde_json::json!(alert.comm));
-    fields.insert("user.uid".into(),  serde_json::json!(alert.uid));
-    fields.insert("kernelradar.detector".into(), serde_json::json!(alert.detector));
-    fields.insert("kernelradar.event_type".into(), serde_json::json!(alert.event_type));
-    fields.insert("kernelradar.correlation_id".into(),
-                   serde_json::json!(alert.correlation_id.to_string()));
+    fields.insert("user.uid".into(), serde_json::json!(alert.uid));
+    fields.insert(
+        "kernelradar.detector".into(),
+        serde_json::json!(alert.detector),
+    );
+    fields.insert(
+        "kernelradar.event_type".into(),
+        serde_json::json!(alert.event_type),
+    );
+    fields.insert(
+        "kernelradar.correlation_id".into(),
+        serde_json::json!(alert.correlation_id.to_string()),
+    );
     fields.insert("kernelradar.context".into(), alert.context.clone());
 
     let obj = serde_json::json!({

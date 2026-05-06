@@ -9,7 +9,6 @@
 /// Each detector holds an `Arc<SharedAllowlist>`; SIGHUP handler in
 /// CLI replaces the inner Vec atomically. Read path is lock-free
 /// after the initial RwLock acquisition.
-
 use std::sync::{Arc, RwLock};
 
 #[derive(Clone)]
@@ -19,7 +18,9 @@ pub struct SharedAllowlist {
 
 impl SharedAllowlist {
     pub fn new(initial: Vec<String>) -> Self {
-        Self { inner: Arc::new(RwLock::new(initial)) }
+        Self {
+            inner: Arc::new(RwLock::new(initial)),
+        }
     }
 
     /// Read snapshot. Cheap: clones the Vec (typically 20-40 strings).

@@ -16,7 +16,6 @@
 ///
 /// Persistence: serialised to JSON every save_interval and at shutdown.
 /// Corrupted file → start fresh, log warning (T-4.8).
-
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock};
@@ -42,11 +41,11 @@ pub struct BaselineConfig {
 impl Default for BaselineConfig {
     fn default() -> Self {
         Self {
-            learning_secs:      3600 * 24,        // 24 hours warm-up
-            score_threshold:    3.0,              // 3σ
-            alpha:              0.10,
-            save_path:          "/var/lib/kernelradar/baseline.json".into(),
-            save_interval_secs: 300,              // every 5 minutes
+            learning_secs: 3600 * 24, // 24 hours warm-up
+            score_threshold: 3.0,     // 3σ
+            alpha: 0.10,
+            save_path: "/var/lib/kernelradar/baseline.json".into(),
+            save_interval_secs: 300, // every 5 minutes
         }
     }
 }
@@ -54,7 +53,7 @@ impl Default for BaselineConfig {
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct HourBucket {
     /// EWMA of count-per-minute
-    sum:   f64,
+    sum: f64,
     /// EWMA of (count-per-minute)^2 — for variance approximation
     sumsq: f64,
     /// Number of minute observations recorded into this bucket
@@ -64,14 +63,20 @@ pub struct HourBucket {
 impl HourBucket {
     fn observe(&mut self, count_in_minute: u64, alpha: f64) {
         let c = count_in_minute as f64;
-        self.sum   = alpha * c     + (1.0 - alpha) * self.sum;
+        self.sum = alpha * c + (1.0 - alpha) * self.sum;
         self.sumsq = alpha * c * c + (1.0 - alpha) * self.sumsq;
         self.samples = self.samples.saturating_add(1);
     }
-    fn mean(&self) -> f64 { self.sum }
+    fn mean(&self) -> f64 {
+        self.sum
+    }
     fn var(&self) -> f64 {
         let v = self.sumsq - self.sum * self.sum;
-        if v < 0.0 { 0.0 } else { v }
+        if v < 0.0 {
+            0.0
+        } else {
+            v
+        }
     }
     fn stddev(&self) -> f64 {
         // Floor of 0.5 so very-quiet buckets still produce sane z-scores.
@@ -91,14 +96,14 @@ pub struct PairStats {
     /// First time we saw this pair
     pub first_seen: Option<DateTime<Utc>>,
     /// Last time we saw an event
-    pub last_seen:  Option<DateTime<Utc>>,
+    pub last_seen: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Baseline {
     pub version: u32,
     pub started: DateTime<Utc>,
-    pub config:  BaselineConfig,
+    pub config: BaselineConfig,
 
     /// (detector, comm) → 24 buckets
     pub pairs: HashMap<String, PairStats>,
@@ -115,7 +120,7 @@ impl Baseline {
             version: 1,
             started: Utc::now(),
             config,
-            pairs:   HashMap::new(),
+            pairs: HashMap::new(),
             cur_minute: HashMap::new(),
         }
     }
@@ -128,13 +133,15 @@ impl Baseline {
     pub fn record_and_score(&mut self, detector: &str, comm: &str) -> Option<f64> {
         let now = Utc::now();
         let cur_min = now.timestamp() / 60;
-        let hour    = now.hour() as usize;
-        let key     = Self::key(detector, comm);
+        let hour = now.hour() as usize;
+        let key = Self::key(detector, comm);
 
         // ── Update minute window: roll over if minute changed ───────
         let stats = self.pairs.entry(key.clone()).or_default();
         stats.total = stats.total.saturating_add(1);
-        if stats.first_seen.is_none() { stats.first_seen = Some(now); }
+        if stats.first_seen.is_none() {
+            stats.first_seen = Some(now);
+        }
         stats.last_seen = Some(now);
 
         let alpha = self.config.alpha;
@@ -149,8 +156,8 @@ impl Baseline {
         let observed = entry.1 as f64;
 
         // ── Scoring ─────────────────────────────────────────────────
-        let learning_until = self.started
-            + chrono::Duration::seconds(self.config.learning_secs as i64);
+        let learning_until =
+            self.started + chrono::Duration::seconds(self.config.learning_secs as i64);
         if now < learning_until {
             return None; // still learning
         }
@@ -160,11 +167,17 @@ impl Baseline {
             // No prior data for this hour. Score as "new pattern":
             // use observed as raw signal compared to mean=0, σ=floor.
             let z = observed / 0.5;
-            if z >= self.config.score_threshold { return Some(z); }
+            if z >= self.config.score_threshold {
+                return Some(z);
+            }
             return None;
         }
         let z = bucket.z_score(observed);
-        if z >= self.config.score_threshold { Some(z) } else { None }
+        if z >= self.config.score_threshold {
+            Some(z)
+        } else {
+            None
+        }
     }
 
     /// Save baseline to disk (JSON).
@@ -243,9 +256,10 @@ pub fn init_with_config(config: BaselineConfig) {
 }
 
 fn lock() -> std::sync::MutexGuard<'static, Baseline> {
-    GLOBAL.get_or_init(|| Mutex::new(Baseline::new(BaselineConfig::default())))
-          .lock()
-          .expect("baseline mutex poisoned")
+    GLOBAL
+        .get_or_init(|| Mutex::new(Baseline::new(BaselineConfig::default())))
+        .lock()
+        .expect("baseline mutex poisoned")
 }
 
 /// Record an event in the baseline; returns Some(z) when anomalous.

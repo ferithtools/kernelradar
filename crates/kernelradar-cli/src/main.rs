@@ -8,14 +8,12 @@ use anyhow::Result;
 use clap::{Parser, Subcommand, ValueEnum};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
-use std::time::Duration;
 use kernelradar_core::config::Config;
 use kernelradar_detectors::{
     allowlist::SharedAllowlist,
     baseline::{
         in_learning, init_with_config as init_baseline, reset_global as baseline_reset,
-        save as baseline_save, snapshot as baseline_snapshot, spawn_periodic_save,
-        BaselineConfig,
+        save as baseline_save, snapshot as baseline_snapshot, spawn_periodic_save, BaselineConfig,
     },
     bpf_loader::BpfLoaderDetector,
     cidr::{parse_all as parse_cidrs, SharedCidrList},
@@ -26,9 +24,7 @@ use kernelradar_detectors::{
     injection::InjectionDetector,
     kmod::KmodDetector,
     lsm::{install as install_lsm, EnforcementConfig},
-    metrics::{
-        cumulative_anomalies, cumulative_bursts, cumulative_totals, spawn_hourly_summary,
-    },
+    metrics::{cumulative_anomalies, cumulative_bursts, cumulative_totals, spawn_hourly_summary},
     network::NetworkDetector,
     output::{detect_systemd_environment, set_output_format, OutputFormat},
     preflight::{check_bpf_dir, check_capabilities},
@@ -36,6 +32,7 @@ use kernelradar_detectors::{
     prometheus::{init as init_prometheus, spawn_server as spawn_prom_server, PromConfig},
     webhook::{init as init_webhook, WebhookConfig},
 };
+use std::time::Duration;
 
 const DEFAULT_ALLOW: &str = "runc,containerd,dockerd,podman,crio,\
 modprobe,kmod,insmod,\
@@ -48,12 +45,24 @@ exim4,postfix,sendmail,\
 gdb,lldb,strace,ltrace,perf,rr";
 
 const DETECTOR_NAMES: &[&str] = &[
-    "privesc", "bpf-loader", "container", "kmod",
-    "fim", "network", "injection", "cred",
+    "privesc",
+    "bpf-loader",
+    "container",
+    "kmod",
+    "fim",
+    "network",
+    "injection",
+    "cred",
 ];
 
 #[derive(Copy, Clone, Debug, ValueEnum)]
-enum CliFormat { Auto, Plain, Json, Journald, Falco }
+enum CliFormat {
+    Auto,
+    Plain,
+    Json,
+    Journald,
+    Falco,
+}
 
 #[derive(Parser)]
 #[command(name = "kernelradar")]
@@ -148,22 +157,24 @@ async fn main() -> Result<()> {
                 OutputFormat::Json
             } else {
                 match cfg.global.output_format.as_str() {
-                    "plain"    => OutputFormat::Plain,
-                    "json"     => OutputFormat::Json,
+                    "plain" => OutputFormat::Plain,
+                    "json" => OutputFormat::Json,
                     "journald" => OutputFormat::Journald,
-                    "falco"    => OutputFormat::Falco,
-                    _ => if detect_systemd_environment() {
-                        OutputFormat::Journald
-                    } else {
-                        OutputFormat::Plain
-                    },
+                    "falco" => OutputFormat::Falco,
+                    _ => {
+                        if detect_systemd_environment() {
+                            OutputFormat::Journald
+                        } else {
+                            OutputFormat::Plain
+                        }
+                    }
                 }
             }
         }
-        CliFormat::Plain    => OutputFormat::Plain,
-        CliFormat::Json     => OutputFormat::Json,
+        CliFormat::Plain => OutputFormat::Plain,
+        CliFormat::Json => OutputFormat::Json,
         CliFormat::Journald => OutputFormat::Journald,
-        CliFormat::Falco    => OutputFormat::Falco,
+        CliFormat::Falco => OutputFormat::Falco,
     };
     set_output_format(format);
 
@@ -173,15 +184,17 @@ async fn main() -> Result<()> {
     } else {
         cfg.global.log_level.clone()
     };
-    let env_filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new(env_filter_str));
+    let env_filter =
+        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(env_filter_str));
 
     match format {
         OutputFormat::Journald => {
-            let layer = tracing_journald::layer()
-                .map_err(|e| anyhow::anyhow!("journald layer: {e}"))?;
+            let layer =
+                tracing_journald::layer().map_err(|e| anyhow::anyhow!("journald layer: {e}"))?;
             tracing_subscriber::registry()
-                .with(env_filter).with(layer).init();
+                .with(env_filter)
+                .with(layer)
+                .init();
         }
         OutputFormat::Json => {
             tracing_subscriber::registry()
@@ -201,37 +214,37 @@ async fn main() -> Result<()> {
 
     // Initialise webhook (T-5.3)
     init_webhook(WebhookConfig {
-        enabled:       cfg.webhook.enabled,
-        url:           cfg.webhook.url.clone(),
-        timeout_secs:  cfg.webhook.timeout_secs,
-        auth_token:    cfg.webhook.auth_token.clone(),
+        enabled: cfg.webhook.enabled,
+        url: cfg.webhook.url.clone(),
+        timeout_secs: cfg.webhook.timeout_secs,
+        auth_token: cfg.webhook.auth_token.clone(),
         severity_filter_alert_or_higher: cfg.webhook.severity_filter_alert_or_higher,
     });
 
     // Initialise Prometheus (T-5.4)
     init_prometheus(PromConfig {
-        enabled:     cfg.prometheus.enabled,
+        enabled: cfg.prometheus.enabled,
         listen_addr: cfg.prometheus.listen_addr.clone(),
     });
 
     // Initialise rate limiter from config
     let rl_cfg = &cfg.ratelimit;
     init_rate_limit(RateLimitConfig {
-        window:           Duration::from_secs(rl_cfg.window_secs),
-        window_max:       rl_cfg.window_max,
-        burst_threshold:  rl_cfg.burst_threshold,
-        burst_window:     Duration::from_secs(rl_cfg.burst_window_secs),
-        backoff_initial:  Duration::from_secs(rl_cfg.backoff_initial_secs),
-        backoff_max:      Duration::from_secs(rl_cfg.backoff_max_secs),
+        window: Duration::from_secs(rl_cfg.window_secs),
+        window_max: rl_cfg.window_max,
+        burst_threshold: rl_cfg.burst_threshold,
+        burst_window: Duration::from_secs(rl_cfg.burst_window_secs),
+        backoff_initial: Duration::from_secs(rl_cfg.backoff_initial_secs),
+        backoff_max: Duration::from_secs(rl_cfg.backoff_max_secs),
     });
 
     // Initialise baseline (T-4) — load from disk if present
     if cfg.baseline.enabled {
         init_baseline(BaselineConfig {
-            learning_secs:      cfg.baseline.learning_secs,
-            score_threshold:    cfg.baseline.score_threshold,
-            alpha:              cfg.baseline.alpha,
-            save_path:          cfg.baseline.save_path.clone(),
+            learning_secs: cfg.baseline.learning_secs,
+            score_threshold: cfg.baseline.score_threshold,
+            alpha: cfg.baseline.alpha,
+            save_path: cfg.baseline.save_path.clone(),
             save_interval_secs: cfg.baseline.save_interval_secs,
         });
     }
@@ -247,7 +260,10 @@ async fn main() -> Result<()> {
     }
 
     // ── Preflight (T-6.6 + T-6.7) ────────────────────────────────────
-    if matches!(cli.command, Commands::Daemon { .. } | Commands::Detect { .. }) {
+    if matches!(
+        cli.command,
+        Commands::Daemon { .. } | Commands::Detect { .. }
+    ) {
         check_capabilities();
         if let Commands::Daemon { ref bpf_dir, .. } = cli.command {
             check_bpf_dir(bpf_dir);
@@ -267,14 +283,14 @@ async fn main() -> Result<()> {
                 _ => "/var/lib/kernelradar/bpf".into(),
             };
             install_lsm(&EnforcementConfig {
-                selfprotect_enabled:  enf.selfprotect_enabled,
-                bpf_enforce_enabled:  enf.bpf_enforce_enabled,
+                selfprotect_enabled: enf.selfprotect_enabled,
+                bpf_enforce_enabled: enf.bpf_enforce_enabled,
                 kmod_enforce_enabled: enf.kmod_enforce_enabled,
                 selfprotect_obj_path: format!("{bpf_dir}/selfprotect.bpf.o"),
                 bpf_enforce_obj_path: format!("{bpf_dir}/enforce_bpf.bpf.o"),
-                kmod_enforce_obj_path:format!("{bpf_dir}/enforce_kmod.bpf.o"),
-                bpf_allowlist:        enf.bpf_allowlist.clone(),
-                kmod_allowlist:       enf.kmod_allowlist.clone(),
+                kmod_enforce_obj_path: format!("{bpf_dir}/enforce_kmod.bpf.o"),
+                bpf_allowlist: enf.bpf_allowlist.clone(),
+                kmod_allowlist: enf.kmod_allowlist.clone(),
             });
         }
     }
@@ -283,15 +299,20 @@ async fn main() -> Result<()> {
         Commands::Daemon { bpf_dir, allow } => {
             run_daemon(&bpf_dir, &allow, &cli.config, &cfg).await?;
         }
-        Commands::Detect { detector, bpf_dir, allow } => {
+        Commands::Detect {
+            detector,
+            bpf_dir,
+            allow,
+        } => {
             let fallback = parse_allow(&allow);
             let al = SharedAllowlist::new(cfg.allowlist_for(&detector, &fallback));
-            let (parsed, skipped) =
-                parse_cidrs(&cfg.network.destination_cidr_allowlist);
+            let (parsed, skipped) = parse_cidrs(&cfg.network.destination_cidr_allowlist);
             if skipped > 0 {
-                tracing::warn!(skipped,
+                tracing::warn!(
+                    skipped,
                     "network: {skipped} invalid CIDR(s) skipped from \
-                     destination_cidr_allowlist");
+                     destination_cidr_allowlist"
+                );
             }
             let cidrs = SharedCidrList::new(parsed);
             run_single_detector(&detector, &bpf_dir, al, cidrs).await?;
@@ -307,7 +328,9 @@ async fn main() -> Result<()> {
                 println!("✓ {p}: valid");
             } else {
                 eprintln!("✗ {p}: {} issue(s):", issues.len());
-                for i in issues { eprintln!("  • {i}"); }
+                for i in issues {
+                    eprintln!("  • {i}");
+                }
                 std::process::exit(1);
             }
         }
@@ -355,15 +378,47 @@ async fn run_single_detector(
     cidrs: SharedCidrList,
 ) -> Result<()> {
     match name {
-        "privesc"     => PrivEscDetector::new(&format!("{bpf_dir}/privesc.bpf.o"),    al).run().await,
-        "bpf-loader"  => BpfLoaderDetector::new(&format!("{bpf_dir}/bpf_loader.bpf.o"), al).run().await,
-        "container"   => ContainerDetector::new(&format!("{bpf_dir}/container.bpf.o"), al).run().await,
-        "kmod"        => KmodDetector::new(&format!("{bpf_dir}/kmod.bpf.o"),         al).run().await,
-        "fim"         => FimDetector::new(&format!("{bpf_dir}/fim.bpf.o"),          al).run().await,
-        "network"     => NetworkDetector::new(&format!("{bpf_dir}/network.bpf.o"),    al, cidrs).run().await,
-        "injection"   => InjectionDetector::new(&format!("{bpf_dir}/injection.bpf.o"), al).run().await,
-        "cred"        => CredDetector::new(&format!("{bpf_dir}/cred.bpf.o"),         al).run().await,
-        other         => {
+        "privesc" => {
+            PrivEscDetector::new(&format!("{bpf_dir}/privesc.bpf.o"), al)
+                .run()
+                .await
+        }
+        "bpf-loader" => {
+            BpfLoaderDetector::new(&format!("{bpf_dir}/bpf_loader.bpf.o"), al)
+                .run()
+                .await
+        }
+        "container" => {
+            ContainerDetector::new(&format!("{bpf_dir}/container.bpf.o"), al)
+                .run()
+                .await
+        }
+        "kmod" => {
+            KmodDetector::new(&format!("{bpf_dir}/kmod.bpf.o"), al)
+                .run()
+                .await
+        }
+        "fim" => {
+            FimDetector::new(&format!("{bpf_dir}/fim.bpf.o"), al)
+                .run()
+                .await
+        }
+        "network" => {
+            NetworkDetector::new(&format!("{bpf_dir}/network.bpf.o"), al, cidrs)
+                .run()
+                .await
+        }
+        "injection" => {
+            InjectionDetector::new(&format!("{bpf_dir}/injection.bpf.o"), al)
+                .run()
+                .await
+        }
+        "cred" => {
+            CredDetector::new(&format!("{bpf_dir}/cred.bpf.o"), al)
+                .run()
+                .await
+        }
+        other => {
             eprintln!("Unknown detector: {other}");
             eprintln!("Available: {}", DETECTOR_NAMES.join(" | "));
             std::process::exit(1);
@@ -404,36 +459,32 @@ fn parse_allow(s: &str) -> Vec<String> {
     s.split(',').map(|e| e.trim().to_string()).collect()
 }
 
-async fn run_daemon(
-    bpf_dir:    &str,
-    cli_allow:  &str,
-    config_path: &str,
-    cfg:        &Config,
-) -> Result<()> {
+async fn run_daemon(bpf_dir: &str, cli_allow: &str, config_path: &str, cfg: &Config) -> Result<()> {
     let fallback = parse_allow(cli_allow);
 
     // Per-detector SharedAllowlist
-    let mut shared: std::collections::BTreeMap<&'static str, SharedAllowlist>
-        = std::collections::BTreeMap::new();
+    let mut shared: std::collections::BTreeMap<&'static str, SharedAllowlist> =
+        std::collections::BTreeMap::new();
     for &name in DETECTOR_NAMES {
         let lst = cfg.allowlist_for(name, &fallback);
         shared.insert(name, SharedAllowlist::new(lst));
     }
 
     // F-1: destination CIDR allowlist for the network detector.
-    let (parsed_cidrs, skipped_cidrs) =
-        parse_cidrs(&cfg.network.destination_cidr_allowlist);
+    let (parsed_cidrs, skipped_cidrs) = parse_cidrs(&cfg.network.destination_cidr_allowlist);
     if skipped_cidrs > 0 {
-        tracing::warn!(skipped = skipped_cidrs,
-            "network: {skipped_cidrs} invalid CIDR(s) skipped at startup");
+        tracing::warn!(
+            skipped = skipped_cidrs,
+            "network: {skipped_cidrs} invalid CIDR(s) skipped at startup"
+        );
     }
     let cidrs = SharedCidrList::new(parsed_cidrs);
 
     tracing::info!(
         version = env!("CARGO_PKG_VERSION"),
-        config  = config_path,
+        config = config_path,
         detectors = DETECTOR_NAMES.len(),
-        cidrs   = cidrs.len(),
+        cidrs = cidrs.len(),
         "kernelradar daemon starting"
     );
 
@@ -443,8 +494,8 @@ async fn run_daemon(
     macro_rules! spawn_detector {
         ($name:expr, $obj:expr, $det:ident) => {
             if cfg.detector_enabled($name) {
-                let obj  = format!("{dir}/{}", $obj);
-                let al   = shared.get($name).cloned().unwrap();
+                let obj = format!("{dir}/{}", $obj);
+                let al = shared.get($name).cloned().unwrap();
                 handles.push(tokio::spawn(async move {
                     if let Err(e) = $det::new(&obj, al).run().await {
                         tracing::error!("{}: {e}", $name);
@@ -456,16 +507,16 @@ async fn run_daemon(
         };
     }
 
-    spawn_detector!("privesc",    "privesc.bpf.o",    PrivEscDetector);
+    spawn_detector!("privesc", "privesc.bpf.o", PrivEscDetector);
     spawn_detector!("bpf-loader", "bpf_loader.bpf.o", BpfLoaderDetector);
-    spawn_detector!("container",  "container.bpf.o",  ContainerDetector);
-    spawn_detector!("kmod",       "kmod.bpf.o",       KmodDetector);
-    spawn_detector!("fim",        "fim.bpf.o",        FimDetector);
+    spawn_detector!("container", "container.bpf.o", ContainerDetector);
+    spawn_detector!("kmod", "kmod.bpf.o", KmodDetector);
+    spawn_detector!("fim", "fim.bpf.o", FimDetector);
 
     // network — needs the destination CIDR allowlist (F-1), spawn explicitly
     if cfg.detector_enabled("network") {
-        let obj   = format!("{dir}/network.bpf.o");
-        let al    = shared.get("network").cloned().unwrap();
+        let obj = format!("{dir}/network.bpf.o");
+        let al = shared.get("network").cloned().unwrap();
         let cidrs = cidrs.clone();
         handles.push(tokio::spawn(async move {
             if let Err(e) = NetworkDetector::new(&obj, al, cidrs).run().await {
@@ -476,8 +527,8 @@ async fn run_daemon(
         tracing::info!(detector = "network", "disabled in config");
     }
 
-    spawn_detector!("injection",  "injection.bpf.o",  InjectionDetector);
-    spawn_detector!("cred",       "cred.bpf.o",       CredDetector);
+    spawn_detector!("injection", "injection.bpf.o", InjectionDetector);
+    spawn_detector!("cred", "cred.bpf.o", CredDetector);
 
     // SIGHUP handler — re-load config and update allowlists + CIDRs
     spawn_sighup_handler(config_path.to_string(), shared, fallback, cidrs);
@@ -508,7 +559,9 @@ fn spawn_sighup_handler(
                 }
             };
             loop {
-                if sig.recv().await.is_none() { break; }
+                if sig.recv().await.is_none() {
+                    break;
+                }
                 tracing::info!(config = %config_path, "SIGHUP received — reloading config");
                 match Config::from_path(&config_path) {
                     Ok(new_cfg) => {
@@ -525,15 +578,16 @@ fn spawn_sighup_handler(
                             sl.replace(lst);
                         }
                         // F-1: reload destination CIDR allowlist atomically
-                        let (parsed, skipped) = parse_cidrs(
-                            &new_cfg.network.destination_cidr_allowlist);
+                        let (parsed, skipped) =
+                            parse_cidrs(&new_cfg.network.destination_cidr_allowlist);
                         if skipped > 0 {
-                            tracing::warn!(skipped,
-                                "network: {skipped} invalid CIDR(s) skipped on reload");
+                            tracing::warn!(
+                                skipped,
+                                "network: {skipped} invalid CIDR(s) skipped on reload"
+                            );
                         }
                         cidrs.replace(parsed);
-                        tracing::info!(cidrs = cidrs.len(),
-                                       "config reload complete");
+                        tracing::info!(cidrs = cidrs.len(), "config reload complete");
                     }
                     Err(e) => tracing::error!("reload failed: {e}"),
                 }
@@ -547,9 +601,9 @@ fn spawn_sighup_handler(
 }
 
 /// Minimal "wait for any of a Vec of JoinHandles to finish".
-async fn futures_select(mut handles: Vec<tokio::task::JoinHandle<()>>)
-    -> (Vec<tokio::task::JoinHandle<()>>, (), ())
-{
+async fn futures_select(
+    mut handles: Vec<tokio::task::JoinHandle<()>>,
+) -> (Vec<tokio::task::JoinHandle<()>>, (), ()) {
     if handles.is_empty() {
         return (handles, (), ());
     }

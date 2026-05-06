@@ -9,39 +9,60 @@ use aya::{maps::RingBuf, programs::TracePoint, Ebpf};
 use std::path::Path;
 use tokio::signal;
 
-use kernelradar_core::event::KrEvent;
 use crate::allowlist::SharedAllowlist;
 use crate::integrity::verify as verify_bpf;
 use crate::util::{comm_str, is_allowed, make_alert, print_alert, read_exe_path};
+use kernelradar_core::event::KrEvent;
 
-const CLONE_NEWNS:     u64 = 0x00020000;
-const CLONE_NEWUSER:   u64 = 0x10000000;
-const CLONE_NEWPID:    u64 = 0x20000000;
-const CLONE_NEWNET:    u64 = 0x40000000;
-const CLONE_NEWIPC:    u64 = 0x08000000;
-const CLONE_NEWUTS:    u64 = 0x04000000;
+const CLONE_NEWNS: u64 = 0x00020000;
+const CLONE_NEWUSER: u64 = 0x10000000;
+const CLONE_NEWPID: u64 = 0x20000000;
+const CLONE_NEWNET: u64 = 0x40000000;
+const CLONE_NEWIPC: u64 = 0x08000000;
+const CLONE_NEWUTS: u64 = 0x04000000;
 const CLONE_NEWCGROUP: u64 = 0x02000000;
 
 fn decode_ns_flags(flags: u64) -> String {
     let mut parts = Vec::new();
-    if flags & CLONE_NEWNS     != 0 { parts.push("NEWNS");     }
-    if flags & CLONE_NEWUSER   != 0 { parts.push("NEWUSER");   }
-    if flags & CLONE_NEWPID    != 0 { parts.push("NEWPID");    }
-    if flags & CLONE_NEWNET    != 0 { parts.push("NEWNET");    }
-    if flags & CLONE_NEWIPC    != 0 { parts.push("NEWIPC");    }
-    if flags & CLONE_NEWUTS    != 0 { parts.push("NEWUTS");    }
-    if flags & CLONE_NEWCGROUP != 0 { parts.push("NEWCGROUP"); }
-    if parts.is_empty() { format!("0x{:x}", flags) } else { parts.join("|") }
+    if flags & CLONE_NEWNS != 0 {
+        parts.push("NEWNS");
+    }
+    if flags & CLONE_NEWUSER != 0 {
+        parts.push("NEWUSER");
+    }
+    if flags & CLONE_NEWPID != 0 {
+        parts.push("NEWPID");
+    }
+    if flags & CLONE_NEWNET != 0 {
+        parts.push("NEWNET");
+    }
+    if flags & CLONE_NEWIPC != 0 {
+        parts.push("NEWIPC");
+    }
+    if flags & CLONE_NEWUTS != 0 {
+        parts.push("NEWUTS");
+    }
+    if flags & CLONE_NEWCGROUP != 0 {
+        parts.push("NEWCGROUP");
+    }
+    if parts.is_empty() {
+        format!("0x{:x}", flags)
+    } else {
+        parts.join("|")
+    }
 }
 
 pub struct ContainerDetector {
     bpf_obj_path: String,
-    allowlist:    SharedAllowlist,
+    allowlist: SharedAllowlist,
 }
 
 impl ContainerDetector {
     pub fn new(bpf_obj_path: &str, allowlist: SharedAllowlist) -> Self {
-        Self { bpf_obj_path: bpf_obj_path.to_string(), allowlist }
+        Self {
+            bpf_obj_path: bpf_obj_path.to_string(),
+            allowlist,
+        }
     }
 
     pub async fn run(&self) -> Result<()> {
@@ -50,15 +71,13 @@ impl ContainerDetector {
 
         let bytes = std::fs::read(path)?;
         verify_bpf("container", &bytes);
-        let mut bpf = Ebpf::load(&bytes)
-            .context("verifier rejected container BPF")?;
+        let mut bpf = Ebpf::load(&bytes).context("verifier rejected container BPF")?;
 
         for (name, tp) in [
             ("kr_tp_unshare", "sys_enter_unshare"),
-            ("kr_tp_setns",   "sys_enter_setns"),
+            ("kr_tp_setns", "sys_enter_setns"),
         ] {
-            let prog: &mut TracePoint = bpf
-                .program_mut(name).context(name)?.try_into()?;
+            let prog: &mut TracePoint = bpf.program_mut(name).context(name)?.try_into()?;
             prog.load()?;
             prog.attach("syscalls", tp)
                 .with_context(|| format!("attach {tp}"))?;
@@ -67,12 +86,14 @@ impl ContainerDetector {
 
         let mut ring: RingBuf<_> = RingBuf::try_from(
             bpf.map_mut("kr_container_events")
-               .context("kr_container_events not found")?
+                .context("kr_container_events not found")?,
         )?;
 
-        tracing::info!(detector = "container",
-                        allowlist_size = self.allowlist.snapshot().len(),
-                        "watching unshare() + setns()");
+        tracing::info!(
+            detector = "container",
+            allowlist_size = self.allowlist.snapshot().len(),
+            "watching unshare() + setns()"
+        );
 
         loop {
             tokio::select! {
@@ -93,9 +114,11 @@ impl ContainerDetector {
 
     fn handle(&self, ev: &KrEvent) {
         let comm = comm_str(ev);
-        let exe  = read_exe_path(ev.pid);
-        let al   = self.allowlist.snapshot();
-        if is_allowed(&comm, exe.as_deref(), &al) { return; }
+        let exe = read_exe_path(ev.pid);
+        let al = self.allowlist.snapshot();
+        if is_allowed(&comm, exe.as_deref(), &al) {
+            return;
+        }
 
         let (title, ctx) = if ev.event_type == 1 {
             let flags = decode_ns_flags(ev.data[0]);

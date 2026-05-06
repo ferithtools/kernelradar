@@ -9,19 +9,22 @@ use aya::{maps::RingBuf, programs::TracePoint, Ebpf};
 use std::path::Path;
 use tokio::signal;
 
-use kernelradar_core::event::KrEvent;
 use crate::allowlist::SharedAllowlist;
 use crate::integrity::verify as verify_bpf;
 use crate::util::{comm_str, is_allowed, make_alert, print_alert, read_exe_path};
+use kernelradar_core::event::KrEvent;
 
 pub struct KmodDetector {
     bpf_obj_path: String,
-    allowlist:    SharedAllowlist,
+    allowlist: SharedAllowlist,
 }
 
 impl KmodDetector {
     pub fn new(bpf_obj_path: &str, allowlist: SharedAllowlist) -> Self {
-        Self { bpf_obj_path: bpf_obj_path.to_string(), allowlist }
+        Self {
+            bpf_obj_path: bpf_obj_path.to_string(),
+            allowlist,
+        }
     }
 
     pub async fn run(&self) -> Result<()> {
@@ -30,15 +33,13 @@ impl KmodDetector {
 
         let bytes = std::fs::read(path)?;
         verify_bpf("kmod", &bytes);
-        let mut bpf = Ebpf::load(&bytes)
-            .context("verifier rejected kmod BPF")?;
+        let mut bpf = Ebpf::load(&bytes).context("verifier rejected kmod BPF")?;
 
         for (name, tp) in [
             ("kr_tp_finit_module", "sys_enter_finit_module"),
-            ("kr_tp_init_module",  "sys_enter_init_module"),
+            ("kr_tp_init_module", "sys_enter_init_module"),
         ] {
-            let prog: &mut TracePoint = bpf
-                .program_mut(name).context(name)?.try_into()?;
+            let prog: &mut TracePoint = bpf.program_mut(name).context(name)?.try_into()?;
             prog.load()?;
             prog.attach("syscalls", tp)
                 .with_context(|| format!("attach {tp}"))?;
@@ -46,12 +47,15 @@ impl KmodDetector {
         }
 
         let mut ring: RingBuf<_> = RingBuf::try_from(
-            bpf.map_mut("kr_kmod_events").context("kr_kmod_events not found")?
+            bpf.map_mut("kr_kmod_events")
+                .context("kr_kmod_events not found")?,
         )?;
 
-        tracing::info!(detector = "kmod",
-                        allowlist_size = self.allowlist.snapshot().len(),
-                        "watching finit_module() + init_module()");
+        tracing::info!(
+            detector = "kmod",
+            allowlist_size = self.allowlist.snapshot().len(),
+            "watching finit_module() + init_module()"
+        );
 
         loop {
             tokio::select! {
@@ -72,9 +76,11 @@ impl KmodDetector {
 
     fn handle(&self, ev: &KrEvent) {
         let comm = comm_str(ev);
-        let exe  = read_exe_path(ev.pid);
-        let al   = self.allowlist.snapshot();
-        if is_allowed(&comm, exe.as_deref(), &al) { return; }
+        let exe = read_exe_path(ev.pid);
+        let al = self.allowlist.snapshot();
+        if is_allowed(&comm, exe.as_deref(), &al) {
+            return;
+        }
 
         let (title, ctx) = if ev.event_type == 2 {
             (

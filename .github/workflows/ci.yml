@@ -13,10 +13,6 @@ jobs:
   fmt:
     name: cargo fmt (T-9.3)
     runs-on: ubuntu-latest
-    # Soft check: codebase uses an aligned-fields style that diverges
-    # from rustfmt defaults. Tracked separately — fmt produces an info
-    # report but does not block PRs until the style decision is finalized.
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable

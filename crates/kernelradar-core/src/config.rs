@@ -25,17 +25,17 @@ use std::path::Path;
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Config {
-    pub global:     GlobalConfig,
+    pub global: GlobalConfig,
     #[serde(rename = "ratelimit")]
-    pub ratelimit:  RateLimitTomlConfig,
-    pub baseline:   BaselineTomlConfig,
-    pub webhook:    WebhookTomlConfig,
+    pub ratelimit: RateLimitTomlConfig,
+    pub baseline: BaselineTomlConfig,
+    pub webhook: WebhookTomlConfig,
     pub prometheus: PromTomlConfig,
     pub enforcement: EnforcementTomlConfig,
     /// Network-detector-specific tunables (F-1).
     /// Generic per-detector knobs (enabled, allowlist) stay in `detectors`.
-    pub network:    NetworkTomlConfig,
-    pub detectors:  BTreeMap<String, DetectorConfig>,
+    pub network: NetworkTomlConfig,
+    pub detectors: BTreeMap<String, DetectorConfig>,
 }
 
 /// Network-detector tunables. Currently a destination CIDR allowlist —
@@ -56,23 +56,26 @@ pub struct NetworkTomlConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct EnforcementTomlConfig {
-    pub selfprotect_enabled:    bool,
-    pub bpf_enforce_enabled:    bool,
-    pub kmod_enforce_enabled:   bool,
-    pub bpf_allowlist:          Vec<String>,
-    pub kmod_allowlist:         Vec<String>,
+    pub selfprotect_enabled: bool,
+    pub bpf_enforce_enabled: bool,
+    pub kmod_enforce_enabled: bool,
+    pub bpf_allowlist: Vec<String>,
+    pub kmod_allowlist: Vec<String>,
 }
 
 impl Default for EnforcementTomlConfig {
     fn default() -> Self {
         Self {
-            selfprotect_enabled:  false,
-            bpf_enforce_enabled:  false,
+            selfprotect_enabled: false,
+            bpf_enforce_enabled: false,
             kmod_enforce_enabled: false,
-            bpf_allowlist:  vec!["bpftrace".into(), "falco".into(),
-                                  "kernelradar".into()],
-            kmod_allowlist: vec!["modprobe".into(), "kmod".into(),
-                                  "insmod".into(), "systemd-udevd".into()],
+            bpf_allowlist: vec!["bpftrace".into(), "falco".into(), "kernelradar".into()],
+            kmod_allowlist: vec![
+                "modprobe".into(),
+                "kmod".into(),
+                "insmod".into(),
+                "systemd-udevd".into(),
+            ],
         }
     }
 }
@@ -80,10 +83,10 @@ impl Default for EnforcementTomlConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct WebhookTomlConfig {
-    pub enabled:       bool,
-    pub url:           String,
-    pub timeout_secs:  u64,
-    pub auth_token:    Option<String>,
+    pub enabled: bool,
+    pub url: String,
+    pub timeout_secs: u64,
+    pub auth_token: Option<String>,
     /// Forward only Severity ≥ Alert when true. Useful for Slack/Telegram.
     pub severity_filter_alert_or_higher: bool,
 }
@@ -91,10 +94,10 @@ pub struct WebhookTomlConfig {
 impl Default for WebhookTomlConfig {
     fn default() -> Self {
         Self {
-            enabled:       false,
-            url:           String::new(),
-            timeout_secs:  3,
-            auth_token:    None,
+            enabled: false,
+            url: String::new(),
+            timeout_secs: 3,
+            auth_token: None,
             severity_filter_alert_or_higher: false,
         }
     }
@@ -103,14 +106,14 @@ impl Default for WebhookTomlConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct PromTomlConfig {
-    pub enabled:     bool,
+    pub enabled: bool,
     pub listen_addr: String,
 }
 
 impl Default for PromTomlConfig {
     fn default() -> Self {
         Self {
-            enabled:     false,
+            enabled: false,
             // 9101 to avoid collision with node_exporter, which owns 9100
             // by convention on every Linux host running prometheus stack.
             listen_addr: "127.0.0.1:9101".into(),
@@ -121,15 +124,15 @@ impl Default for PromTomlConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct BaselineTomlConfig {
-    pub enabled:            bool,
+    pub enabled: bool,
     /// Warm-up period before scoring kicks in
-    pub learning_secs:      u64,
+    pub learning_secs: u64,
     /// Z-score threshold above which an anomaly is reported
-    pub score_threshold:    f64,
+    pub score_threshold: f64,
     /// EWMA smoothing factor (0..1). Smaller = more inertia.
-    pub alpha:              f64,
+    pub alpha: f64,
     /// File to persist learned model
-    pub save_path:          String,
+    pub save_path: String,
     /// How often to flush to disk
     pub save_interval_secs: u64,
 }
@@ -137,11 +140,11 @@ pub struct BaselineTomlConfig {
 impl Default for BaselineTomlConfig {
     fn default() -> Self {
         Self {
-            enabled:            true,
-            learning_secs:      3600 * 24,
-            score_threshold:    3.0,
-            alpha:              0.10,
-            save_path:          "/var/lib/kernelradar/baseline.json".into(),
+            enabled: true,
+            learning_secs: 3600 * 24,
+            score_threshold: 3.0,
+            alpha: 0.10,
+            save_path: "/var/lib/kernelradar/baseline.json".into(),
             save_interval_secs: 300,
         }
     }
@@ -151,26 +154,26 @@ impl Default for BaselineTomlConfig {
 #[serde(default)]
 pub struct RateLimitTomlConfig {
     /// Sliding window length, seconds
-    pub window_secs:        u64,
+    pub window_secs: u64,
     /// Max emissions per key per window
-    pub window_max:         u32,
+    pub window_max: u32,
     /// Burst detection: count threshold within burst_window
-    pub burst_threshold:    u32,
-    pub burst_window_secs:  u64,
+    pub burst_threshold: u32,
+    pub burst_window_secs: u64,
     /// Exponential backoff initial delay
     pub backoff_initial_secs: u64,
-    pub backoff_max_secs:     u64,
+    pub backoff_max_secs: u64,
 }
 
 impl Default for RateLimitTomlConfig {
     fn default() -> Self {
         Self {
-            window_secs:        60,
-            window_max:         10,
-            burst_threshold:    100,
-            burst_window_secs:  1,
+            window_secs: 60,
+            window_max: 10,
+            burst_threshold: 100,
+            burst_window_secs: 1,
             backoff_initial_secs: 60,
-            backoff_max_secs:     3600,
+            backoff_max_secs: 3600,
         }
     }
 }
@@ -178,14 +181,14 @@ impl Default for RateLimitTomlConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct GlobalConfig {
-    pub log_level:     String,
+    pub log_level: String,
     pub output_format: String,
 }
 
 impl Default for GlobalConfig {
     fn default() -> Self {
         Self {
-            log_level:     "info".to_string(),
+            log_level: "info".to_string(),
             output_format: "auto".to_string(),
         }
     }
@@ -194,13 +197,16 @@ impl Default for GlobalConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct DetectorConfig {
-    pub enabled:   bool,
+    pub enabled: bool,
     pub allowlist: Vec<String>,
 }
 
 impl Default for DetectorConfig {
     fn default() -> Self {
-        Self { enabled: true, allowlist: Vec::new() }
+        Self {
+            enabled: true,
+            allowlist: Vec::new(),
+        }
     }
 }
 
@@ -222,8 +228,7 @@ impl Config {
         if !p.exists() {
             return Err(ConfigError::NotFound(path.to_string()));
         }
-        let text = std::fs::read_to_string(p)
-            .map_err(|e| ConfigError::Io(path.to_string(), e))?;
+        let text = std::fs::read_to_string(p).map_err(|e| ConfigError::Io(path.to_string(), e))?;
         toml::from_str::<Config>(&text)
             .map_err(|e| ConfigError::Parse(path.to_string(), e.to_string()))
     }
@@ -251,8 +256,10 @@ impl Config {
 
         match self.global.output_format.as_str() {
             "auto" | "plain" | "json" | "journald" | "falco" => {}
-            other => issues.push(format!("global.output_format = {other:?} \
-                                          (expected auto|plain|json|journald|falco)")),
+            other => issues.push(format!(
+                "global.output_format = {other:?} \
+                                          (expected auto|plain|json|journald|falco)"
+            )),
         }
 
         if self.webhook.enabled && self.webhook.url.is_empty() {
@@ -266,19 +273,29 @@ impl Config {
             "trace" | "debug" | "info" | "warn" | "error" | "off" => {}
             // Composite RUST_LOG strings are also fine — pass through
             s if s.contains('=') || s.contains(',') => {}
-            other => issues.push(format!("global.log_level = {other:?} \
+            other => issues.push(format!(
+                "global.log_level = {other:?} \
                                           (expected trace|debug|info|warn|error|off \
-                                          or a RUST_LOG-style filter)")),
+                                          or a RUST_LOG-style filter)"
+            )),
         }
 
         let known: &[&str] = &[
-            "privesc", "bpf-loader", "container", "kmod",
-            "fim", "network", "injection", "cred",
+            "privesc",
+            "bpf-loader",
+            "container",
+            "kmod",
+            "fim",
+            "network",
+            "injection",
+            "cred",
         ];
         for name in self.detectors.keys() {
             if !known.iter().any(|k| k == name) {
-                issues.push(format!("unknown detector {name:?} \
-                                     (known: {known:?})"));
+                issues.push(format!(
+                    "unknown detector {name:?} \
+                                     (known: {known:?})"
+                ));
             }
         }
 
@@ -287,8 +304,10 @@ impl Config {
             for entry in &cfg.allowlist {
                 if let Some(rx) = entry.strip_prefix('/').and_then(|s| s.strip_suffix('/')) {
                     if let Err(e) = regex::Regex::new(rx) {
-                        issues.push(format!("detectors.{det}.allowlist: \
-                                             bad regex {entry:?}: {e}"));
+                        issues.push(format!(
+                            "detectors.{det}.allowlist: \
+                                             bad regex {entry:?}: {e}"
+                        ));
                     }
                 }
             }
@@ -299,9 +318,11 @@ impl Config {
         // detectors-crate dep) so config validation stays standalone.
         for entry in &self.network.destination_cidr_allowlist {
             if !is_valid_ipv4_cidr(entry) {
-                issues.push(format!("network.destination_cidr_allowlist: \
+                issues.push(format!(
+                    "network.destination_cidr_allowlist: \
                                      invalid CIDR {entry:?} \
-                                     (expected a.b.c.d/N, N in 0..=32)"));
+                                     (expected a.b.c.d/N, N in 0..=32)"
+                ));
             }
         }
 
@@ -312,10 +333,14 @@ impl Config {
 /// Cheap IPv4-CIDR syntactic check used by Config::validate. Mirrors the
 /// runtime parser in `kernelradar_detectors::cidr::Cidr::parse`.
 fn is_valid_ipv4_cidr(s: &str) -> bool {
-    let Some((addr, len)) = s.split_once('/') else { return false; };
-    if addr.trim().parse::<std::net::Ipv4Addr>().is_err() { return false; }
+    let Some((addr, len)) = s.split_once('/') else {
+        return false;
+    };
+    if addr.trim().parse::<std::net::Ipv4Addr>().is_err() {
+        return false;
+    }
     match len.trim().parse::<u32>() {
         Ok(n) if n <= 32 => true,
-        _                => false,
+        _ => false,
     }
 }

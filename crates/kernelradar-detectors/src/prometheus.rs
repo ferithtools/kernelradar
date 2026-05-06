@@ -13,26 +13,23 @@
 /// All other paths → 404.
 ///
 /// Renders all counters from `metrics::*` plus daemon health gauges.
-
 use std::sync::OnceLock;
 
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 
-use crate::metrics::{
-    cumulative_anomalies, cumulative_bursts, cumulative_totals,
-};
+use crate::metrics::{cumulative_anomalies, cumulative_bursts, cumulative_totals};
 
 #[derive(Debug, Clone)]
 pub struct PromConfig {
-    pub enabled:     bool,
+    pub enabled: bool,
     pub listen_addr: String,
 }
 
 impl Default for PromConfig {
     fn default() -> Self {
         Self {
-            enabled:     false,
+            enabled: false,
             listen_addr: "127.0.0.1:9100".into(),
         }
     }
@@ -40,16 +37,23 @@ impl Default for PromConfig {
 
 static CONFIG: OnceLock<PromConfig> = OnceLock::new();
 
-pub fn init(config: PromConfig) { let _ = CONFIG.set(config); }
+pub fn init(config: PromConfig) {
+    let _ = CONFIG.set(config);
+}
 
 pub fn spawn_server() {
-    let cfg = match CONFIG.get() { Some(c) => c, None => return };
-    if !cfg.enabled { return; }
+    let cfg = match CONFIG.get() {
+        Some(c) => c,
+        None => return,
+    };
+    if !cfg.enabled {
+        return;
+    }
 
     let addr = cfg.listen_addr.clone();
     tokio::spawn(async move {
         let listener = match TcpListener::bind(&addr).await {
-            Ok(l)  => l,
+            Ok(l) => l,
             Err(e) => {
                 tracing::error!(error = %e, addr = %addr,
                                  "prometheus: bind failed");
@@ -77,10 +81,11 @@ pub fn spawn_server() {
                 let path = req.split_whitespace().nth(1).unwrap_or("");
 
                 let resp = match path {
-                    "/metrics" => http_response(200, "text/plain; version=0.0.4",
-                                                  &render_metrics()),
+                    "/metrics" => {
+                        http_response(200, "text/plain; version=0.0.4", &render_metrics())
+                    }
                     "/healthz" => http_response(200, "text/plain", "ok\n"),
-                    _          => http_response(404, "text/plain", "not found\n"),
+                    _ => http_response(404, "text/plain", "not found\n"),
                 };
                 let _ = stream.write_all(resp.as_bytes()).await;
                 let _ = peer; // suppress unused
@@ -93,7 +98,7 @@ fn http_response(code: u16, ctype: &str, body: &str) -> String {
     let status = match code {
         200 => "200 OK",
         404 => "404 Not Found",
-        _   => "500 Internal Server Error",
+        _ => "500 Internal Server Error",
     };
     format!(
         "HTTP/1.1 {status}\r\n\

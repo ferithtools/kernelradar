@@ -9,14 +9,13 @@
 /// Verifies that the running process has the capabilities BPF needs,
 /// warns about insecure permissions on the BPF object directory,
 /// and gives admin-friendly hints when something is missing.
-
 use std::path::Path;
 
 #[derive(Debug, Clone, Copy)]
 pub struct Capabilities {
-    pub cap_bpf:          bool,
-    pub cap_perfmon:      bool,
-    pub cap_sys_admin:    bool,
+    pub cap_bpf: bool,
+    pub cap_perfmon: bool,
+    pub cap_sys_admin: bool,
     pub cap_sys_resource: bool,
 }
 
@@ -25,15 +24,15 @@ pub struct Capabilities {
 pub fn current_caps() -> Option<Capabilities> {
     let s = std::fs::read_to_string("/proc/self/status").ok()?;
     let line = s.lines().find(|l| l.starts_with("CapEff:"))?;
-    let hex  = line.split_whitespace().nth(1)?;
+    let hex = line.split_whitespace().nth(1)?;
     let bits = u64::from_str_radix(hex, 16).ok()?;
 
     Some(Capabilities {
         // Numbers from include/uapi/linux/capability.h
-        cap_sys_admin:    bits & (1u64 << 21) != 0,
+        cap_sys_admin: bits & (1u64 << 21) != 0,
         cap_sys_resource: bits & (1u64 << 24) != 0,
-        cap_perfmon:      bits & (1u64 << 38) != 0,
-        cap_bpf:          bits & (1u64 << 39) != 0,
+        cap_perfmon: bits & (1u64 << 38) != 0,
+        cap_bpf: bits & (1u64 << 39) != 0,
     })
 }
 
@@ -119,7 +118,9 @@ pub fn check_bpf_dir(path: &str) {
     if let Ok(mounts) = std::fs::read_to_string("/proc/mounts") {
         for line in mounts.lines() {
             let parts: Vec<_> = line.split_whitespace().collect();
-            if parts.len() < 4 { continue; }
+            if parts.len() < 4 {
+                continue;
+            }
             let mountpoint = parts[1];
             // Match the closest mount that contains our path
             if path.starts_with(mountpoint) || mountpoint == path {
