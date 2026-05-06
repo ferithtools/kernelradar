@@ -5,6 +5,7 @@ use kernelradar_detectors::{
     container::ContainerDetector,
     fim::FimDetector,
     kmod::KmodDetector,
+    network::NetworkDetector,
     privesc::PrivEscDetector,
 };
 
@@ -14,11 +15,20 @@ use kernelradar_detectors::{
 //   - BPF tooling (bpftrace, falco, kernelradar)
 //   - legitimate setuid users (sshd does privsep, su/sudo/login/polkitd
 //     transition uid by design; PAM/systemd often need root credentials)
-const DEFAULT_ALLOW: &str =
-    "runc,containerd,dockerd,podman,crio,\
-     modprobe,kmod,insmod,\
-     bpftrace,falco,kernelradar,\
-     sshd,su,sudo,login,polkitd,dbus-daemon,cron,crond,systemd";
+// DEFAULT_ALLOW covers (groups separated):
+//   - Container runtimes: runc, containerd, dockerd, podman, crio
+//   - Module management: modprobe, kmod, insmod
+//   - BPF tooling: bpftrace, falco, kernelradar
+//   - Legitimate setuid users (sshd privsep, sudo/su/login, PAM)
+//   - Network-noisy legitimate processes (DNS, NTP, package managers)
+//   - Mail / system daemons
+const DEFAULT_ALLOW: &str = "runc,containerd,dockerd,podman,crio,\
+modprobe,kmod,insmod,\
+bpftrace,falco,kernelradar,\
+sshd,su,sudo,login,polkitd,dbus-daemon,cron,crond,systemd,\
+AdGuardHome,systemd-resolved,chronyd,ntpd,timesyncd,\
+apt,apt-get,dpkg,unattended-upgr,\
+exim4,postfix,sendmail";
 
 #[derive(Parser)]
 #[command(name = "kernelradar")]
@@ -109,9 +119,15 @@ async fn main() -> Result<()> {
                     d.json = json;
                     d.run().await?;
                 }
+                "network" => {
+                    let mut d = NetworkDetector::new(
+                        &format!("{bpf_dir}/network.bpf.o"), al);
+                    d.json = json;
+                    d.run().await?;
+                }
                 other => {
                     eprintln!("Unknown detector: {other}");
-                    eprintln!("Available: privesc | bpf-loader | container | kmod | fim");
+                    eprintln!("Available: privesc | bpf-loader | container | kmod | fim | network");
                     std::process::exit(1);
                 }
             }
@@ -124,6 +140,7 @@ async fn main() -> Result<()> {
             println!("  [3] container   ✅");
             println!("  [4] kmod        ✅");
             println!("  [5] fim         ✅");
+            println!("  [6] network     ✅");
         }
     }
     Ok(())
@@ -137,7 +154,7 @@ async fn run_daemon(bpf_dir: &str, allow: &str, json: bool) -> Result<()> {
     let al = parse_allow(allow);
     if !json {
         println!("kernelradar {}", env!("CARGO_PKG_VERSION"));
-        println!("daemon mode — 5 detectors active");
+        println!("daemon mode — 6 detectors active");
         println!("Allowlist: {allow}");
         println!("Press Ctrl+C to stop.\n");
     }
@@ -172,9 +189,16 @@ async fn run_daemon(bpf_dir: &str, allow: &str, json: bool) -> Result<()> {
             if let Err(e) = d.run().await { tracing::error!("fim: {e}"); }
         })
     };
+    let d6 = { let (o, a) = (format!("{bpf_dir}/network.bpf.o"), al.clone());
+        tokio::spawn(async move {
+            let mut d = NetworkDetector::new(&o, a); d.json = json;
+            if let Err(e) = d.run().await { tracing::error!("network: {e}"); }
+        })
+    };
 
     tokio::select! {
-        _ = d1 => {}  _ = d2 => {}  _ = d3 => {}  _ = d4 => {}  _ = d5 => {}
+        _ = d1 => {}  _ = d2 => {}  _ = d3 => {}
+        _ = d4 => {}  _ = d5 => {}  _ = d6 => {}
     }
     println!("\nkernelradar stopped.");
     Ok(())

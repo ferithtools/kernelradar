@@ -1,0 +1,106 @@
+/// Network anomaly detector — T-0.6
+///
+/// Watches outbound connect() to public (non-private) IPv4 addresses.
+/// BPF filters out loopback, RFC1918, link-local, CGNAT, multicast.
+/// Userspace adds severity rules for ports commonly used by
+/// reverse shells (4444, 4445, 5555, 6666, 6667, 1337, 31337).
+
+use anyhow::{Context, Result};
+use aya::{maps::RingBuf, programs::TracePoint, Ebpf};
+use std::net::Ipv4Addr;
+use std::path::Path;
+use tokio::signal;
+
+use kernelradar_core::event::KrEvent;
+use crate::util::{comm_str, is_allowed, make_alert, print_alert, read_exe_path};
+
+/// Ports often associated with reverse shells / C2.
+/// A connect() to one of these → severity bumped to ALERT.
+const SUSPICIOUS_PORTS: &[u16] = &[
+    1337, 4444, 4445, 5555, 6666, 6667, 6697, 8080, 9001, 9050, 31337,
+];
+
+pub struct NetworkDetector {
+    bpf_obj_path: String,
+    allowlist:    Vec<String>,
+    pub json:     bool,
+}
+
+impl NetworkDetector {
+    pub fn new(bpf_obj_path: &str, allowlist: Vec<String>) -> Self {
+        Self { bpf_obj_path: bpf_obj_path.to_string(), allowlist, json: false }
+    }
+
+    pub async fn run(&self) -> Result<()> {
+        let path = Path::new(&self.bpf_obj_path);
+        anyhow::ensure!(path.exists(), "BPF object not found: {}", self.bpf_obj_path);
+
+        let mut bpf = Ebpf::load(&std::fs::read(path)?)
+            .context("verifier rejected network BPF")?;
+
+        let tp: &mut TracePoint = bpf
+            .program_mut("kr_tp_connect").context("kr_tp_connect")?.try_into()?;
+        tp.load()?;
+        tp.attach("syscalls", "sys_enter_connect")?;
+        tracing::info!("attached tracepoint: syscalls/sys_enter_connect");
+
+        let mut ring: RingBuf<_> = RingBuf::try_from(
+            bpf.map_mut("kr_net_events").context("kr_net_events not found")?
+        )?;
+
+        if !self.json {
+            println!("kernelradar network: watching connect() to public IPs");
+            println!("Allowlist: {:?}", self.allowlist);
+            println!("Press Ctrl+C to stop.\n");
+        }
+
+        loop {
+            tokio::select! {
+                _ = signal::ctrl_c() => break,
+                _ = tokio::time::sleep(tokio::time::Duration::from_millis(100)) => {
+                    while let Some(item) = ring.next() {
+                        if item.len() < std::mem::size_of::<KrEvent>() { continue; }
+                        let ev: KrEvent = unsafe {
+                            std::ptr::read_unaligned(item.as_ptr() as *const KrEvent)
+                        };
+                        self.handle(&ev);
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn handle(&self, ev: &KrEvent) {
+        let comm = comm_str(ev);
+        let exe  = read_exe_path(ev.pid);
+        if is_allowed(&comm, exe.as_deref(), &self.allowlist) { return; }
+
+        // data[0] low 32 bits = (family << 16) | port_be
+        // data[1] = ipv4 addr_be
+        let port_be = (ev.data[0] & 0xffff) as u16;
+        let addr_be = (ev.data[1] & 0xffffffff) as u32;
+
+        let port = u16::from_be(port_be);
+        let ip   = Ipv4Addr::from(u32::from_be(addr_be));
+
+        let suspicious = SUSPICIOUS_PORTS.contains(&port);
+        let mut ev_copy = ev.clone();
+        if suspicious {
+            ev_copy.severity = 3; // CRITICAL
+        }
+
+        let title = format!(
+            "connect → {ip}:{port} by {comm}{}",
+            if suspicious { "  ⚠ SUSPICIOUS PORT" } else { "" }
+        );
+        let ctx = serde_json::json!({
+            "remote_ip":   ip.to_string(),
+            "remote_port": port,
+            "suspicious":  suspicious,
+            "exe":         exe,
+        });
+        let alert = make_alert(&ev_copy, exe.as_deref(), "network", &title, ctx);
+        print_alert(&alert, self.json);
+    }
+}
