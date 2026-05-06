@@ -15,8 +15,7 @@ BPF_CFLAGS := \
     -D__TARGET_ARCH_$(ARCH) \
     -I$(INCLUDE)
 
-PROGRAMS := privesc
-# bpf_loader added in Phase 1 step 2
+PROGRAMS := privesc bpf_loader
 
 .PHONY: all clean vmlinux
 

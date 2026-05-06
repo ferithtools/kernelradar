@@ -1,5 +1,6 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
+use kernelradar_detectors::bpf_loader::BpfLoaderDetector;
 use kernelradar_detectors::privesc::PrivEscDetector;
 
 #[derive(Parser)]
@@ -7,7 +8,6 @@ use kernelradar_detectors::privesc::PrivEscDetector;
 #[command(about = "Behavioral anomaly detection for the Linux kernel")]
 #[command(version)]
 struct Cli {
-    /// Path to config file
     #[arg(long, default_value = "/etc/kernelradar/config.toml")]
     config: String,
 
@@ -20,17 +20,21 @@ enum Commands {
     /// Run all enabled detectors as a daemon
     Daemon,
 
-    /// Run a single detector and print events to stdout
+    /// Run a single detector, print events to stdout
     Detect {
-        /// Detector: privesc | bpf-loader | container | kmod
+        /// Detector name: privesc | bpf-loader
         detector: String,
 
-        /// Path to compiled BPF object directory
+        /// Directory containing compiled BPF .o files
         #[arg(long, default_value = "crates/kernelradar-bpf/.output")]
         bpf_dir: String,
+
+        /// Comma-separated allowlist for bpf-loader (process names)
+        #[arg(long, default_value = "bpftrace,falco,kernelradar")]
+        allow: String,
     },
 
-    /// Print loaded config and detector status
+    /// Show detector status
     Status,
 }
 
@@ -47,19 +51,26 @@ async fn main() -> Result<()> {
 
     match cli.command {
         Commands::Daemon => {
-            tracing::info!("daemon mode — Phase 2");
-            eprintln!("Daemon not yet implemented (Phase 2).");
+            eprintln!("Daemon mode — Phase 2.");
         }
 
-        Commands::Detect { detector, bpf_dir } => {
+        Commands::Detect { detector, bpf_dir, allow } => {
             match detector.as_str() {
                 "privesc" => {
                     let obj = format!("{}/privesc.bpf.o", bpf_dir);
                     PrivEscDetector::new(&obj).run().await?;
                 }
+                "bpf-loader" => {
+                    let obj = format!("{}/bpf_loader.bpf.o", bpf_dir);
+                    let allowlist = allow
+                        .split(',')
+                        .map(|s| s.trim().to_string())
+                        .collect();
+                    BpfLoaderDetector::new(&obj, allowlist).run().await?;
+                }
                 other => {
                     eprintln!("Unknown detector: {other}");
-                    eprintln!("Available: privesc");
+                    eprintln!("Available: privesc | bpf-loader");
                     std::process::exit(1);
                 }
             }
@@ -67,10 +78,9 @@ async fn main() -> Result<()> {
 
         Commands::Status => {
             println!("kernelradar {}", env!("CARGO_PKG_VERSION"));
-            println!("Config: {}", cli.config);
             println!("Detectors:");
-            println!("  [1] privesc     ✅ implemented");
-            println!("  [2] bpf-loader  — Phase 1 step 2");
+            println!("  [1] privesc     ✅ ready");
+            println!("  [2] bpf-loader  ✅ ready");
             println!("  [3] container   — Phase 2");
             println!("  [4] kmod        — Phase 2");
         }
