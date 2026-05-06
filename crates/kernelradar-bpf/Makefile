@@ -15,7 +15,7 @@ BPF_CFLAGS := \
     -D__TARGET_ARCH_$(ARCH) \
     -I$(INCLUDE)
 
-PROGRAMS := privesc bpf_loader
+PROGRAMS := privesc bpf_loader container kmod
 
 .PHONY: all clean vmlinux
 
