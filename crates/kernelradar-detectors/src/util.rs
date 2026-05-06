@@ -8,8 +8,9 @@ use kernelradar_core::{
     event::{KrEvent, Severity},
 };
 
+use crate::dedup::{check as rate_check, Decision};
 use crate::output::{global_output_format, OutputFormat};
-use crate::metrics::record_alert;
+use crate::metrics::{record_alert, record_burst, record_suppressed};
 
 static ALERT_ID: AtomicU64 = AtomicU64::new(1);
 
@@ -79,6 +80,7 @@ pub fn make_alert(
         timestamp:      Utc::now(),
         severity:       sev,
         detector:       detector.to_string(),
+        event_type:     ev.event_type,
         title:          title.to_string(),
         description:    exe.map(|e| format!("exe={e}")).unwrap_or_default(),
         pid:            ev.pid,
@@ -96,12 +98,62 @@ pub fn make_alert(
 ///   Journald — tracing event with structured fields,
 ///              consumed by tracing-journald layer
 pub fn print_alert(alert: &Alert, _legacy_json: bool) {
-    record_alert(&alert.detector, alert.severity);
+    // Rate limit / burst / backoff (T-3)
+    let decision = rate_check(
+        &alert.detector,
+        &alert.comm,
+        alert.event_type,
+        alert.severity,
+    );
+
+    match decision {
+        Decision::Suppress => {
+            record_suppressed(&alert.detector, alert.severity);
+            return;
+        }
+        Decision::Allow => {
+            record_alert(&alert.detector, alert.severity);
+            emit(alert);
+        }
+        Decision::Burst => {
+            record_alert(&alert.detector, alert.severity);
+            record_burst(&alert.detector);
+            emit(alert);
+            emit_burst_marker(alert);
+        }
+    }
+}
+
+fn emit(alert: &Alert) {
     match global_output_format() {
         OutputFormat::Plain    => emit_plain(alert),
         OutputFormat::Json     => emit_json(alert),
         OutputFormat::Journald => emit_journald(alert),
     }
+}
+
+/// Emit a synthetic BURST alert that follows the original alert.
+fn emit_burst_marker(orig: &Alert) {
+    let burst = Alert {
+        id:             orig.id, // marked as same ID for grouping
+        correlation_id: orig.correlation_id,
+        timestamp:      Utc::now(),
+        severity:       kernelradar_core::event::Severity::Critical,
+        detector:       format!("{}.burst", orig.detector),
+        event_type:     orig.event_type,
+        title:          format!("BURST: {} {} fired ≥ threshold per second by {}",
+                                orig.detector, orig.event_type, orig.comm),
+        description:    "rate-limit burst threshold exceeded".to_string(),
+        pid:            orig.pid,
+        uid:            orig.uid,
+        comm:           orig.comm.clone(),
+        context: serde_json::json!({
+            "burst": true,
+            "of_alert_id": orig.id,
+            "of_correlation_id": orig.correlation_id.to_string(),
+        }),
+    };
+    emit(&burst);
 }
 
 fn emit_plain(alert: &Alert) {

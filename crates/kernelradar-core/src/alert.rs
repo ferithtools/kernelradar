@@ -12,6 +12,9 @@ pub struct Alert {
     pub timestamp:   DateTime<Utc>,
     pub severity:    Severity,
     pub detector:    String,
+    /// Detector-specific event subtype (mirrors `KrEvent::event_type`).
+    /// Used by the rate-limiter as part of the dedup key.
+    pub event_type:  u16,
     pub title:       String,
     pub description: String,
     pub pid:         u32,

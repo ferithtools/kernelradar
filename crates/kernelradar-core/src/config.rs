@@ -20,7 +20,37 @@ use std::path::Path;
 #[serde(default)]
 pub struct Config {
     pub global:    GlobalConfig,
+    #[serde(rename = "ratelimit")]
+    pub ratelimit: RateLimitTomlConfig,
     pub detectors: BTreeMap<String, DetectorConfig>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct RateLimitTomlConfig {
+    /// Sliding window length, seconds
+    pub window_secs:        u64,
+    /// Max emissions per key per window
+    pub window_max:         u32,
+    /// Burst detection: count threshold within burst_window
+    pub burst_threshold:    u32,
+    pub burst_window_secs:  u64,
+    /// Exponential backoff initial delay
+    pub backoff_initial_secs: u64,
+    pub backoff_max_secs:     u64,
+}
+
+impl Default for RateLimitTomlConfig {
+    fn default() -> Self {
+        Self {
+            window_secs:        60,
+            window_max:         10,
+            burst_threshold:    100,
+            burst_window_secs:  1,
+            backoff_initial_secs: 60,
+            backoff_max_secs:     3600,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

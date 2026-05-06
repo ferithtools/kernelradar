@@ -2,6 +2,7 @@ pub mod allowlist;
 pub mod bpf_loader;
 pub mod container;
 pub mod cred;
+pub mod dedup;
 pub mod fim;
 pub mod injection;
 pub mod kmod;

@@ -1,8 +1,4 @@
-/// Alert counter metrics (T-1.7).
-///
-/// Maintains in-memory counters per (detector, severity) and emits an
-/// hourly summary into the same logging channel. No external dependency
-/// — pure std::sync.
+/// Alert counters + hourly summary (T-1.7 + T-3.2).
 
 use std::collections::BTreeMap;
 use std::sync::Mutex;
@@ -11,12 +7,18 @@ use std::time::Duration;
 
 use kernelradar_core::event::Severity;
 
+use crate::dedup::drain_suppressed;
+
 #[derive(Default)]
 struct Counters {
     /// (detector, severity) → count since last summary
-    bucket: BTreeMap<(String, Severity), u64>,
-    /// Cumulative since process start
-    total:  BTreeMap<(String, Severity), u64>,
+    bucket_emitted: BTreeMap<(String, Severity), u64>,
+    /// (detector, severity) → cumulative since process start
+    total_emitted:  BTreeMap<(String, Severity), u64>,
+    /// (detector, severity) → suppressed since last summary
+    bucket_suppressed: BTreeMap<(String, Severity), u64>,
+    /// (detector) → burst count cumulative
+    total_bursts:   BTreeMap<String, u64>,
 }
 
 static COUNTERS: OnceLock<Mutex<Counters>> = OnceLock::new();
@@ -28,17 +30,28 @@ fn counters() -> &'static Mutex<Counters> {
 pub fn record_alert(detector: &str, severity: Severity) {
     if let Ok(mut c) = counters().lock() {
         let key = (detector.to_string(), severity);
-        *c.bucket.entry(key.clone()).or_insert(0) += 1;
-        *c.total .entry(key)        .or_insert(0) += 1;
+        *c.bucket_emitted.entry(key.clone()).or_insert(0) += 1;
+        *c.total_emitted .entry(key)        .or_insert(0) += 1;
     }
 }
 
-/// Spawn a background task that emits hourly summaries.
-/// Call once at startup.
+pub fn record_suppressed(detector: &str, severity: Severity) {
+    if let Ok(mut c) = counters().lock() {
+        let key = (detector.to_string(), severity);
+        *c.bucket_suppressed.entry(key).or_insert(0) += 1;
+    }
+}
+
+pub fn record_burst(detector: &str) {
+    if let Ok(mut c) = counters().lock() {
+        *c.total_bursts.entry(detector.to_string()).or_insert(0) += 1;
+    }
+}
+
 pub fn spawn_hourly_summary() {
     tokio::spawn(async {
         let mut interval = tokio::time::interval(Duration::from_secs(3600));
-        // Skip first immediate tick — wait one hour before first report
+        // Skip the immediate first tick — wait one hour before first report
         interval.tick().await;
         loop {
             interval.tick().await;
@@ -48,40 +61,60 @@ pub fn spawn_hourly_summary() {
 }
 
 fn emit_summary() {
-    let snapshot: BTreeMap<(String, Severity), u64> = {
+    // Drain emitted bucket
+    let (emitted, suppressed_internal) = {
         let mut c = counters().lock().unwrap();
-        let snap = std::mem::take(&mut c.bucket);
-        snap
+        let emitted   = std::mem::take(&mut c.bucket_emitted);
+        let supp_int  = std::mem::take(&mut c.bucket_suppressed);
+        (emitted, supp_int)
     };
 
-    if snapshot.is_empty() {
+    // Pull rate-limiter suppressed counts (cleared on read)
+    let supp_external = drain_suppressed();
+
+    let total_emitted: u64 = emitted.values().sum();
+    let total_suppressed_int: u64 = suppressed_internal.values().sum();
+    let total_suppressed_ext: u64 = supp_external.iter().map(|(_, n, _)| *n).sum();
+
+    if total_emitted == 0 && total_suppressed_int == 0 && total_suppressed_ext == 0 {
         tracing::info!(
             target: "kernelradar.summary",
             window_hours = 1u32,
-            count = 0u32,
+            emitted = 0u64, suppressed = 0u64,
             "no alerts in the last hour"
         );
         return;
     }
 
-    let total_in_window: u64 = snapshot.values().sum();
-    let breakdown: Vec<String> = snapshot
+    let breakdown: Vec<String> = emitted
         .iter()
         .map(|((det, sev), n)| format!("{det}/{sev}={n}"))
+        .collect();
+
+    let supp_breakdown: Vec<String> = supp_external
+        .iter()
+        .map(|((det, comm, et), n, sev)| format!("{det}/{comm}/{et}/{sev}={n}"))
         .collect();
 
     tracing::info!(
         target: "kernelradar.summary",
         window_hours = 1u32,
-        count = total_in_window,
-        breakdown = %breakdown.join(" "),
-        "hourly summary: {} alerts ({})",
-        total_in_window,
+        emitted = total_emitted,
+        suppressed = total_suppressed_ext,
+        emitted_breakdown    = %breakdown.join(" "),
+        suppressed_breakdown = %supp_breakdown.join(" "),
+        "hourly summary: emitted={} suppressed={} ({})",
+        total_emitted,
+        total_suppressed_ext,
         breakdown.join(" "),
     );
 }
 
-/// Get cumulative totals (for `kernelradar status` and future Prometheus).
+/// Cumulative totals + bursts for `kernelradar status`.
 pub fn cumulative_totals() -> BTreeMap<(String, Severity), u64> {
-    counters().lock().map(|c| c.total.clone()).unwrap_or_default()
+    counters().lock().map(|c| c.total_emitted.clone()).unwrap_or_default()
+}
+
+pub fn cumulative_bursts() -> BTreeMap<String, u64> {
+    counters().lock().map(|c| c.total_bursts.clone()).unwrap_or_default()
 }

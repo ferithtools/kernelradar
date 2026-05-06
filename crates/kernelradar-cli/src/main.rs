@@ -2,16 +2,18 @@ use anyhow::Result;
 use clap::{Parser, Subcommand, ValueEnum};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
+use std::time::Duration;
 use kernelradar_core::config::Config;
 use kernelradar_detectors::{
     allowlist::SharedAllowlist,
     bpf_loader::BpfLoaderDetector,
     container::ContainerDetector,
     cred::CredDetector,
+    dedup::{init as init_rate_limit, RateLimitConfig},
     fim::FimDetector,
     injection::InjectionDetector,
     kmod::KmodDetector,
-    metrics::{cumulative_totals, spawn_hourly_summary},
+    metrics::{cumulative_bursts, cumulative_totals, spawn_hourly_summary},
     network::NetworkDetector,
     output::{detect_systemd_environment, set_output_format, OutputFormat},
     privesc::PrivEscDetector,
@@ -160,6 +162,17 @@ async fn main() -> Result<()> {
         }
     }
 
+    // Initialise rate limiter from config
+    let rl_cfg = &cfg.ratelimit;
+    init_rate_limit(RateLimitConfig {
+        window:           Duration::from_secs(rl_cfg.window_secs),
+        window_max:       rl_cfg.window_max,
+        burst_threshold:  rl_cfg.burst_threshold,
+        burst_window:     Duration::from_secs(rl_cfg.burst_window_secs),
+        backoff_initial:  Duration::from_secs(rl_cfg.backoff_initial_secs),
+        backoff_max:      Duration::from_secs(rl_cfg.backoff_max_secs),
+    });
+
     if matches!(cli.command, Commands::Daemon { .. }) {
         spawn_hourly_summary();
     }
@@ -230,6 +243,13 @@ fn print_status() {
         println!("\nCumulative alerts (this process):");
         for ((det, sev), n) in totals {
             println!("  {det}/{sev}: {n}");
+        }
+    }
+    let bursts = cumulative_bursts();
+    if !bursts.is_empty() {
+        println!("\nBursts detected (this process):");
+        for (det, n) in bursts {
+            println!("  {det}: {n}");
         }
     }
 }
@@ -364,6 +384,17 @@ const EXAMPLE_CONFIG: &str = r#"# /etc/kernelradar/config.toml — example
 [global]
 log_level     = "info"
 output_format = "auto"   # auto | plain | json | journald
+
+[ratelimit]
+# Sliding window: max emissions per (detector, comm, event_type) per window
+window_secs = 60
+window_max  = 10
+# Burst detection: same key fires this many times in burst_window → BURST alert
+burst_threshold   = 100
+burst_window_secs = 1
+# Exponential backoff after window cap exceeded (seconds; doubles per recurrence)
+backoff_initial_secs = 60
+backoff_max_secs     = 3600
 
 # Allowlist entries:
 #   "exact"        — match comm or basename(exe)
