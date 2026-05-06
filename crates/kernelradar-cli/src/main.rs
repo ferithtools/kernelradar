@@ -1,5 +1,6 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
+use kernelradar_detectors::privesc::PrivEscDetector;
 
 #[derive(Parser)]
 #[command(name = "kernelradar")]
@@ -21,18 +22,16 @@ enum Commands {
 
     /// Run a single detector and print events to stdout
     Detect {
-        /// Detector name: privesc | bpf-loader | container | kmod
+        /// Detector: privesc | bpf-loader | container | kmod
         detector: String,
+
+        /// Path to compiled BPF object directory
+        #[arg(long, default_value = "crates/kernelradar-bpf/.output")]
+        bpf_dir: String,
     },
 
     /// Print loaded config and detector status
     Status,
-
-    /// Run a self-test: generates a synthetic detectable event
-    Test {
-        /// Detector to test
-        detector: String,
-    },
 }
 
 #[tokio::main]
@@ -48,28 +47,32 @@ async fn main() -> Result<()> {
 
     match cli.command {
         Commands::Daemon => {
-            tracing::info!("kernelradar daemon starting");
-            // TODO: Phase 1 — load BPF programs, start event loop
-            eprintln!("Daemon not yet implemented. Phase 1 in progress.");
+            tracing::info!("daemon mode — Phase 2");
+            eprintln!("Daemon not yet implemented (Phase 2).");
         }
 
-        Commands::Detect { detector } => {
-            tracing::info!(%detector, "starting single-detector mode");
-            eprintln!("Single detector mode: {} — Phase 1 in progress.", detector);
+        Commands::Detect { detector, bpf_dir } => {
+            match detector.as_str() {
+                "privesc" => {
+                    let obj = format!("{}/privesc.bpf.o", bpf_dir);
+                    PrivEscDetector::new(&obj).run().await?;
+                }
+                other => {
+                    eprintln!("Unknown detector: {other}");
+                    eprintln!("Available: privesc");
+                    std::process::exit(1);
+                }
+            }
         }
 
         Commands::Status => {
             println!("kernelradar {}", env!("CARGO_PKG_VERSION"));
             println!("Config: {}", cli.config);
             println!("Detectors:");
-            println!("  [1] privesc     — planned");
-            println!("  [2] bpf-loader  — planned");
-            println!("  [3] container   — planned");
-            println!("  [4] kmod        — planned");
-        }
-
-        Commands::Test { detector } => {
-            eprintln!("Test mode: {} — Phase 1 in progress.", detector);
+            println!("  [1] privesc     ✅ implemented");
+            println!("  [2] bpf-loader  — Phase 1 step 2");
+            println!("  [3] container   — Phase 2");
+            println!("  [4] kmod        — Phase 2");
         }
     }
 
