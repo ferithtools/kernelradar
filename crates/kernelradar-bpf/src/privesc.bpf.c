@@ -14,6 +14,7 @@
 #include <bpf/bpf_tracing.h>
 #include <bpf/bpf_core_read.h>
 #include "../include/events.h"
+#include "../include/stats.h"
 
 char LICENSE[] SEC("license") = "GPL";
 
@@ -59,10 +60,14 @@ int kr_tp_setuid(struct trace_event_raw_sys_enter *ctx)
     if (cur_uid == 0)
         return 0;
 
+    kr_stat_inc(KR_STAT_PRIVESC_OBSERVED);
+
     struct kr_event *e = bpf_ringbuf_reserve(&kr_events,
                                               sizeof(*e), 0);
-    if (!e)
+    if (!e) {
+        kr_stat_inc(KR_STAT_PRIVESC_DROPPED);
         return 0;
+    }
 
     fill_common(e, KR_DETECTOR_PRIVESC,
                 KR_SEV_ALERT, KR_PRIVESC_SETUID);
@@ -87,10 +92,14 @@ int kr_tp_setgid(struct trace_event_raw_sys_enter *ctx)
     if (cur_gid == 0)
         return 0;
 
+    kr_stat_inc(KR_STAT_PRIVESC_OBSERVED);
+
     struct kr_event *e = bpf_ringbuf_reserve(&kr_events,
                                               sizeof(*e), 0);
-    if (!e)
+    if (!e) {
+        kr_stat_inc(KR_STAT_PRIVESC_DROPPED);
         return 0;
+    }
 
     fill_common(e, KR_DETECTOR_PRIVESC,
                 KR_SEV_ALERT, KR_PRIVESC_SETGID);

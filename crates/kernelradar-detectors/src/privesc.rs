@@ -29,6 +29,12 @@ impl PrivEscDetector {
         let mut bpf = Ebpf::load(&bytes)
             .context("verifier rejected privesc BPF")?;
 
+        // T-7.2/T-7.3: pin kr_stats so external tools (bpftool,
+        // benchmark harness) can read it without owning the map.
+        if let Some(stats) = bpf.map_mut("kr_stats") {
+            let _ = stats.pin("/sys/fs/bpf/kr_stats_privesc");
+        }
+
         for (name, tp) in [
             ("kr_tp_setuid", "sys_enter_setuid"),
             ("kr_tp_setgid", "sys_enter_setgid"),

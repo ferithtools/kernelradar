@@ -47,6 +47,29 @@
 
 #define KR_CRED_READ            1   /* read open of credential file */
 
+/* ── Stats counter slots (T-7.2/T-7.3) ──────────────────────────────── */
+/* All BPF programs share one BPF_MAP_TYPE_ARRAY of __u64 with these
+ * indices. Userspace reads them periodically for Prometheus metrics. */
+
+#define KR_STAT_PRIVESC_OBSERVED    0   /* setuid/setgid → root seen */
+#define KR_STAT_PRIVESC_DROPPED     1   /* ringbuf full, event lost */
+#define KR_STAT_BPFL_OBSERVED       2
+#define KR_STAT_BPFL_DROPPED        3
+#define KR_STAT_CONTAINER_OBSERVED  4
+#define KR_STAT_CONTAINER_DROPPED   5
+#define KR_STAT_KMOD_OBSERVED       6
+#define KR_STAT_KMOD_DROPPED        7
+#define KR_STAT_FIM_OBSERVED        8
+#define KR_STAT_FIM_DROPPED         9
+#define KR_STAT_NETWORK_OBSERVED   10
+#define KR_STAT_NETWORK_DROPPED    11
+#define KR_STAT_INJECTION_OBSERVED 12
+#define KR_STAT_INJECTION_DROPPED  13
+#define KR_STAT_CRED_OBSERVED      14
+#define KR_STAT_CRED_DROPPED       15
+
+#define KR_STAT_SLOTS              16
+
 /* ── Common event struct (must match Rust KrEvent) ───────────────────── */
 
 struct kr_event {
