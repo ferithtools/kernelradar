@@ -1,0 +1,18 @@
+[package]
+name        = "kernelradar-detectors"
+description = "Detector implementations: privesc, bpf-loader, container, kmod"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+kernelradar-core = { path = "../kernelradar-core" }
+
+aya        = { workspace = true }
+aya-log    = { workspace = true }
+tokio      = { workspace = true }
+tracing    = { workspace = true }
+anyhow     = { workspace = true }
+serde_json = { workspace = true }
+chrono     = { workspace = true }

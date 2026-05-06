@@ -1,0 +1,26 @@
+# Rust
+/target/
+Cargo.lock
+**/*.rs.bk
+*.pdb
+
+# BPF build artifacts
+crates/kernelradar-bpf/.output/
+**/*.o
+**/*.skel.h
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Logs and test output
+*.log
+tests/output/
+
+# Secrets — never commit these
+*.pem
+*.key
+config.local.toml
