@@ -22,7 +22,37 @@ pub struct Config {
     pub global:    GlobalConfig,
     #[serde(rename = "ratelimit")]
     pub ratelimit: RateLimitTomlConfig,
+    pub baseline:  BaselineTomlConfig,
     pub detectors: BTreeMap<String, DetectorConfig>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct BaselineTomlConfig {
+    pub enabled:            bool,
+    /// Warm-up period before scoring kicks in
+    pub learning_secs:      u64,
+    /// Z-score threshold above which an anomaly is reported
+    pub score_threshold:    f64,
+    /// EWMA smoothing factor (0..1). Smaller = more inertia.
+    pub alpha:              f64,
+    /// File to persist learned model
+    pub save_path:          String,
+    /// How often to flush to disk
+    pub save_interval_secs: u64,
+}
+
+impl Default for BaselineTomlConfig {
+    fn default() -> Self {
+        Self {
+            enabled:            true,
+            learning_secs:      3600 * 24,
+            score_threshold:    3.0,
+            alpha:              0.10,
+            save_path:          "/var/lib/kernelradar/baseline.json".into(),
+            save_interval_secs: 300,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

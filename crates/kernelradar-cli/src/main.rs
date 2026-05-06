@@ -6,6 +6,11 @@ use std::time::Duration;
 use kernelradar_core::config::Config;
 use kernelradar_detectors::{
     allowlist::SharedAllowlist,
+    baseline::{
+        in_learning, init_with_config as init_baseline, reset_global as baseline_reset,
+        save as baseline_save, snapshot as baseline_snapshot, spawn_periodic_save,
+        BaselineConfig,
+    },
     bpf_loader::BpfLoaderDetector,
     container::ContainerDetector,
     cred::CredDetector,
@@ -13,7 +18,9 @@ use kernelradar_detectors::{
     fim::FimDetector,
     injection::InjectionDetector,
     kmod::KmodDetector,
-    metrics::{cumulative_bursts, cumulative_totals, spawn_hourly_summary},
+    metrics::{
+        cumulative_anomalies, cumulative_bursts, cumulative_totals, spawn_hourly_summary,
+    },
     network::NetworkDetector,
     output::{detect_systemd_environment, set_output_format, OutputFormat},
     privesc::PrivEscDetector,
@@ -82,6 +89,20 @@ enum Commands {
     /// Config file management
     #[command(subcommand)]
     ConfigCmd(ConfigSub),
+
+    /// Adaptive baseline management (T-4)
+    #[command(subcommand)]
+    Baseline(BaselineSub),
+}
+
+#[derive(Subcommand)]
+enum BaselineSub {
+    /// Print the learned baseline as JSON
+    Show,
+    /// Reset the baseline (delete persistent file + zero in-memory)
+    Reset,
+    /// Quick status: are we still learning, how many pairs known, etc.
+    Status,
 }
 
 #[derive(Subcommand)]
@@ -173,8 +194,22 @@ async fn main() -> Result<()> {
         backoff_max:      Duration::from_secs(rl_cfg.backoff_max_secs),
     });
 
+    // Initialise baseline (T-4) — load from disk if present
+    if cfg.baseline.enabled {
+        init_baseline(BaselineConfig {
+            learning_secs:      cfg.baseline.learning_secs,
+            score_threshold:    cfg.baseline.score_threshold,
+            alpha:              cfg.baseline.alpha,
+            save_path:          cfg.baseline.save_path.clone(),
+            save_interval_secs: cfg.baseline.save_interval_secs,
+        });
+    }
+
     if matches!(cli.command, Commands::Daemon { .. }) {
         spawn_hourly_summary();
+        if cfg.baseline.enabled {
+            spawn_periodic_save();
+        }
     }
 
     match cli.command {
@@ -208,6 +243,30 @@ async fn main() -> Result<()> {
         }
         Commands::ConfigCmd(ConfigSub::Example) => {
             print!("{}", EXAMPLE_CONFIG);
+        }
+        Commands::Baseline(BaselineSub::Show) => {
+            let snap = baseline_snapshot();
+            println!("{}", serde_json::to_string_pretty(&snap)?);
+        }
+        Commands::Baseline(BaselineSub::Reset) => {
+            baseline_reset();
+            // Also delete persistent file so a daemon restart doesn't reload it
+            let path = cfg.baseline.save_path.clone();
+            let _ = std::fs::remove_file(&path);
+            println!("baseline reset; removed {}", path);
+        }
+        Commands::Baseline(BaselineSub::Status) => {
+            let snap = baseline_snapshot();
+            println!("Baseline:");
+            println!("  started:        {}", snap.started);
+            println!("  in_learning:    {}", in_learning());
+            println!("  learning_secs:  {}", snap.config.learning_secs);
+            println!("  threshold:      {} σ", snap.config.score_threshold);
+            println!("  alpha:          {}", snap.config.alpha);
+            println!("  save_path:      {}", snap.config.save_path);
+            println!("  pairs_observed: {}", snap.pairs.len());
+            let total: u64 = snap.pairs.values().map(|p| p.total).sum();
+            println!("  total_events:   {}", total);
         }
     }
 
@@ -249,6 +308,13 @@ fn print_status() {
     if !bursts.is_empty() {
         println!("\nBursts detected (this process):");
         for (det, n) in bursts {
+            println!("  {det}: {n}");
+        }
+    }
+    let anomalies = cumulative_anomalies();
+    if !anomalies.is_empty() {
+        println!("\nAnomalies detected (this process):");
+        for (det, n) in anomalies {
             println!("  {det}: {n}");
         }
     }
@@ -395,6 +461,16 @@ burst_window_secs = 1
 # Exponential backoff after window cap exceeded (seconds; doubles per recurrence)
 backoff_initial_secs = 60
 backoff_max_secs     = 3600
+
+[baseline]
+# Adaptive anomaly scoring: learn normal rates per (detector, comm, hour-of-day),
+# then emit synthetic ANOMALY alerts when activity deviates by ≥ score_threshold σ.
+enabled            = true
+learning_secs      = 86400   # 24 hours warm-up before scoring
+score_threshold    = 3.0     # 3-sigma threshold
+alpha              = 0.10    # EWMA smoothing factor (smaller = more inertia)
+save_path          = "/var/lib/kernelradar/baseline.json"
+save_interval_secs = 300     # save every 5 minutes
 
 # Allowlist entries:
 #   "exact"        — match comm or basename(exe)

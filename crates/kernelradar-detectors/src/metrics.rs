@@ -19,6 +19,8 @@ struct Counters {
     bucket_suppressed: BTreeMap<(String, Severity), u64>,
     /// (detector) → burst count cumulative
     total_bursts:   BTreeMap<String, u64>,
+    /// (detector) → anomaly count cumulative (T-4)
+    total_anomalies: BTreeMap<String, u64>,
 }
 
 static COUNTERS: OnceLock<Mutex<Counters>> = OnceLock::new();
@@ -45,6 +47,12 @@ pub fn record_suppressed(detector: &str, severity: Severity) {
 pub fn record_burst(detector: &str) {
     if let Ok(mut c) = counters().lock() {
         *c.total_bursts.entry(detector.to_string()).or_insert(0) += 1;
+    }
+}
+
+pub fn record_anomaly(detector: &str) {
+    if let Ok(mut c) = counters().lock() {
+        *c.total_anomalies.entry(detector.to_string()).or_insert(0) += 1;
     }
 }
 
@@ -117,4 +125,8 @@ pub fn cumulative_totals() -> BTreeMap<(String, Severity), u64> {
 
 pub fn cumulative_bursts() -> BTreeMap<String, u64> {
     counters().lock().map(|c| c.total_bursts.clone()).unwrap_or_default()
+}
+
+pub fn cumulative_anomalies() -> BTreeMap<String, u64> {
+    counters().lock().map(|c| c.total_anomalies.clone()).unwrap_or_default()
 }

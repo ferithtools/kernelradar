@@ -8,9 +8,10 @@ use kernelradar_core::{
     event::{KrEvent, Severity},
 };
 
+use crate::baseline::record_and_score as baseline_score;
 use crate::dedup::{check as rate_check, Decision};
 use crate::output::{global_output_format, OutputFormat};
-use crate::metrics::{record_alert, record_burst, record_suppressed};
+use crate::metrics::{record_alert, record_anomaly, record_burst, record_suppressed};
 
 static ALERT_ID: AtomicU64 = AtomicU64::new(1);
 
@@ -98,7 +99,11 @@ pub fn make_alert(
 ///   Journald — tracing event with structured fields,
 ///              consumed by tracing-journald layer
 pub fn print_alert(alert: &Alert, _legacy_json: bool) {
-    // Rate limit / burst / backoff (T-3)
+    // T-4: Update baseline + score regardless of rate limit decision.
+    // Suppressed events still feed the model — that IS the model.
+    let z = baseline_score(&alert.detector, &alert.comm);
+
+    // T-3: rate limit / burst / backoff
     let decision = rate_check(
         &alert.detector,
         &alert.comm,
@@ -109,17 +114,31 @@ pub fn print_alert(alert: &Alert, _legacy_json: bool) {
     match decision {
         Decision::Suppress => {
             record_suppressed(&alert.detector, alert.severity);
+            // Anomaly side-channel: even rate-limited events that are
+            // statistically anomalous deserve a one-off ANOMALY alert.
+            if let Some(score) = z {
+                emit_anomaly_marker(alert, score);
+                record_anomaly(&alert.detector);
+            }
             return;
         }
         Decision::Allow => {
             record_alert(&alert.detector, alert.severity);
             emit(alert);
+            if let Some(score) = z {
+                emit_anomaly_marker(alert, score);
+                record_anomaly(&alert.detector);
+            }
         }
         Decision::Burst => {
             record_alert(&alert.detector, alert.severity);
             record_burst(&alert.detector);
             emit(alert);
             emit_burst_marker(alert);
+            if let Some(score) = z {
+                emit_anomaly_marker(alert, score);
+                record_anomaly(&alert.detector);
+            }
         }
     }
 }
@@ -130,6 +149,31 @@ fn emit(alert: &Alert) {
         OutputFormat::Json     => emit_json(alert),
         OutputFormat::Journald => emit_journald(alert),
     }
+}
+
+/// Emit a synthetic ANOMALY alert when baseline scores high z-score.
+fn emit_anomaly_marker(orig: &Alert, z: f64) {
+    let anomaly = Alert {
+        id:             orig.id,
+        correlation_id: orig.correlation_id,
+        timestamp:      Utc::now(),
+        severity:       kernelradar_core::event::Severity::Alert,
+        detector:       format!("{}.anomaly", orig.detector),
+        event_type:     orig.event_type,
+        title:          format!("ANOMALY: {} {} by {} — z={:.1}σ",
+                                orig.detector, orig.event_type, orig.comm, z),
+        description:    "rate diverges from learned baseline".to_string(),
+        pid:            orig.pid,
+        uid:            orig.uid,
+        comm:           orig.comm.clone(),
+        context: serde_json::json!({
+            "anomaly":          true,
+            "z_score":          z,
+            "of_alert_id":      orig.id,
+            "of_correlation_id": orig.correlation_id.to_string(),
+        }),
+    };
+    emit(&anomaly);
 }
 
 /// Emit a synthetic BURST alert that follows the original alert.
