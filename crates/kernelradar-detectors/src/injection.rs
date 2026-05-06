@@ -1,3 +1,9 @@
+// SPDX-License-Identifier: GPL-2.0-only
+// Copyright (C) 2026 Ferith Tools
+//
+// Part of the kernelradar project — Linux kernel anomaly detection via BPF.
+// See LICENSE for terms.
+
 /// Process injection detector — T-0.7
 ///
 /// Watches ptrace() ATTACH/SEIZE/POKE and process_vm_writev() —

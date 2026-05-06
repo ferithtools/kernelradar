@@ -1,3 +1,9 @@
+// SPDX-License-Identifier: GPL-2.0-only
+// Copyright (C) 2026 Ferith Tools
+//
+// Part of the kernelradar project — Linux kernel anomaly detection via BPF.
+// See LICENSE for terms.
+
 /// Compute SHA-256 hashes of the BPF object files at build time.
 /// The result is written to $OUT_DIR/bpf_hashes.rs as a static map
 /// that the runtime loader uses to verify integrity (T-6.5).

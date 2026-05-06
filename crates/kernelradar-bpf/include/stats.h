@@ -1,4 +1,5 @@
-/* SPDX-License-Identifier: GPL-2.0
+/* SPDX-License-Identifier: GPL-2.0-only
+ * Copyright (C) 2026 Ferith Tools
  *
  * Shared kr_stats map definition. Each BPF program SHOULD include
  * this once and use the helper macros to bump counters.

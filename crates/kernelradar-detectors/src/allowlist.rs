@@ -1,3 +1,9 @@
+// SPDX-License-Identifier: GPL-2.0-only
+// Copyright (C) 2026 Ferith Tools
+//
+// Part of the kernelradar project — Linux kernel anomaly detection via BPF.
+// See LICENSE for terms.
+
 /// Shared allowlist with hot-reload support (T-2.4 + T-2.6).
 ///
 /// Each detector holds an `Arc<SharedAllowlist>`; SIGHUP handler in

@@ -1,3 +1,9 @@
+// SPDX-License-Identifier: GPL-2.0-only
+// Copyright (C) 2026 Ferith Tools
+//
+// Part of the kernelradar project — Linux kernel anomaly detection via BPF.
+// See LICENSE for terms.
+
 /// Webhook output (T-5.3) — HTTP POST per alert.
 ///
 /// Async fire-and-forget: each alert spawns a non-blocking POST.

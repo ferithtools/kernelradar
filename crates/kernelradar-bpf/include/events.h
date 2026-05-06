@@ -1,5 +1,13 @@
+/* SPDX-License-Identifier: GPL-2.0-only
+ * Copyright (C) 2026 Ferith Tools
+ *
+ * Part of the kernelradar project — Linux kernel anomaly detection via BPF.
+ * Common event types and constants shared by every BPF program and the
+ * userspace consumer in `kernelradar-core::event::KrEvent`. See LICENSE.
+ *
+ * Types come from vmlinux.h — do NOT include <linux/types.h> here.
+ */
 #pragma once
-/* Types come from vmlinux.h — do NOT include <linux/types.h> here */
 
 /* ── Event identifiers ───────────────────────────────────────────────── */
 

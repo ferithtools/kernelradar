@@ -1,3 +1,9 @@
+// SPDX-License-Identifier: GPL-2.0-only
+// Copyright (C) 2026 Ferith Tools
+//
+// Part of the kernelradar project — Linux kernel anomaly detection via BPF.
+// See LICENSE for terms.
+
 use anyhow::{Context, Result};
 use aya::{maps::RingBuf, programs::TracePoint, Ebpf};
 use std::path::Path;

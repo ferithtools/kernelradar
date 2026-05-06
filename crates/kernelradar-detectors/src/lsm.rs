@@ -1,3 +1,9 @@
+// SPDX-License-Identifier: GPL-2.0-only
+// Copyright (C) 2026 Ferith Tools
+//
+// Part of the kernelradar project — Linux kernel anomaly detection via BPF.
+// See LICENSE for terms.
+
 /// LSM enforcement & self-protection (T-0.9 + T-6.4).
 ///
 /// Loads BPF LSM programs that DENY operations:

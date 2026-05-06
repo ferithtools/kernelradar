@@ -1,6 +1,6 @@
 [Unit]
 Description=kernelradar — behavioral anomaly detection for the Linux kernel
-Documentation=https://github.com/cycloon/kernelradar
+Documentation=https://github.com/ferith-tools/kernelradar
 After=network.target
 ConditionKernelVersion=>=6.1
 

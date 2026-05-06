@@ -1,3 +1,9 @@
+// SPDX-License-Identifier: GPL-2.0-only
+// Copyright (C) 2026 Ferith Tools
+//
+// Part of the kernelradar project — Linux kernel anomaly detection via BPF.
+// See LICENSE for terms.
+
 /// Rate-limiting + burst detection + exponential backoff (T-3).
 ///
 /// Single in-memory state shared across all detectors. The decision is

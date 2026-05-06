@@ -9,9 +9,9 @@ resolver = "2"
 [workspace.package]
 version      = "0.1.0"
 edition      = "2021"
-authors      = ["Ferith Tools <ferithtools@users.noreply.github.com>"]
+authors      = ["Ferith Tools"]
 license      = "GPL-2.0-only"
-repository   = "https://github.com/cycloon/kernelradar"
+repository   = "https://github.com/ferith-tools/kernelradar"
 
 [workspace.dependencies]
 # Async runtime
