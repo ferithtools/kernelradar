@@ -5,6 +5,7 @@ use tokio::signal;
 
 use kernelradar_core::event::KrEvent;
 use crate::allowlist::SharedAllowlist;
+use crate::integrity::verify as verify_bpf;
 use crate::util::{comm_str, is_allowed, make_alert, print_alert, read_exe_path};
 
 pub struct PrivEscDetector {
@@ -23,7 +24,9 @@ impl PrivEscDetector {
             "BPF object not found: {}\nBuild: cd crates/kernelradar-bpf && make",
             self.bpf_obj_path);
 
-        let mut bpf = Ebpf::load(&std::fs::read(path)?)
+        let bytes = std::fs::read(path)?;
+        verify_bpf("privesc", &bytes);
+        let mut bpf = Ebpf::load(&bytes)
             .context("verifier rejected privesc BPF")?;
 
         for (name, tp) in [

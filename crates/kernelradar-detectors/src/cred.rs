@@ -10,6 +10,7 @@ use tokio::signal;
 
 use kernelradar_core::event::KrEvent;
 use crate::allowlist::SharedAllowlist;
+use crate::integrity::verify as verify_bpf;
 use crate::util::{comm_str, is_allowed, make_alert, print_alert, read_exe_path};
 
 #[derive(Debug, Clone, Copy)]
@@ -81,7 +82,9 @@ impl CredDetector {
         let path = Path::new(&self.bpf_obj_path);
         anyhow::ensure!(path.exists(), "BPF object not found: {}", self.bpf_obj_path);
 
-        let mut bpf = Ebpf::load(&std::fs::read(path)?)
+        let bytes = std::fs::read(path)?;
+        verify_bpf("cred", &bytes);
+        let mut bpf = Ebpf::load(&bytes)
             .context("verifier rejected cred BPF")?;
 
         let tp: &mut TracePoint = bpf

@@ -25,7 +25,34 @@ pub struct Config {
     pub baseline:   BaselineTomlConfig,
     pub webhook:    WebhookTomlConfig,
     pub prometheus: PromTomlConfig,
+    pub enforcement: EnforcementTomlConfig,
     pub detectors:  BTreeMap<String, DetectorConfig>,
+}
+
+/// LSM enforcement (T-0.9) and self-protection (T-6.4).
+/// All flags default to false — enabling these can break the system.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct EnforcementTomlConfig {
+    pub selfprotect_enabled:    bool,
+    pub bpf_enforce_enabled:    bool,
+    pub kmod_enforce_enabled:   bool,
+    pub bpf_allowlist:          Vec<String>,
+    pub kmod_allowlist:         Vec<String>,
+}
+
+impl Default for EnforcementTomlConfig {
+    fn default() -> Self {
+        Self {
+            selfprotect_enabled:  false,
+            bpf_enforce_enabled:  false,
+            kmod_enforce_enabled: false,
+            bpf_allowlist:  vec!["bpftrace".into(), "falco".into(),
+                                  "kernelradar".into()],
+            kmod_allowlist: vec!["modprobe".into(), "kmod".into(),
+                                  "insmod".into(), "systemd-udevd".into()],
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

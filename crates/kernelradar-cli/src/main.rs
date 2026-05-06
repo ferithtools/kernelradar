@@ -18,11 +18,13 @@ use kernelradar_detectors::{
     fim::FimDetector,
     injection::InjectionDetector,
     kmod::KmodDetector,
+    lsm::{install as install_lsm, EnforcementConfig},
     metrics::{
         cumulative_anomalies, cumulative_bursts, cumulative_totals, spawn_hourly_summary,
     },
     network::NetworkDetector,
     output::{detect_systemd_environment, set_output_format, OutputFormat},
+    preflight::{check_bpf_dir, check_capabilities},
     privesc::PrivEscDetector,
     prometheus::{init as init_prometheus, spawn_server as spawn_prom_server, PromConfig},
     webhook::{init as init_webhook, WebhookConfig},
@@ -233,6 +235,39 @@ async fn main() -> Result<()> {
         }
         if cfg.prometheus.enabled {
             spawn_prom_server();
+        }
+    }
+
+    // ── Preflight (T-6.6 + T-6.7) ────────────────────────────────────
+    if matches!(cli.command, Commands::Daemon { .. } | Commands::Detect { .. }) {
+        check_capabilities();
+        if let Commands::Daemon { ref bpf_dir, .. } = cli.command {
+            check_bpf_dir(bpf_dir);
+        }
+        if let Commands::Detect { ref bpf_dir, .. } = cli.command {
+            check_bpf_dir(bpf_dir);
+        }
+    }
+
+    // ── LSM enforcement + self-protection (T-0.9 + T-6.4) ────────────
+    // Failures here NEVER abort the daemon; LSM stays opt-in and silent.
+    if matches!(cli.command, Commands::Daemon { .. }) {
+        let enf = &cfg.enforcement;
+        if enf.selfprotect_enabled || enf.bpf_enforce_enabled || enf.kmod_enforce_enabled {
+            let bpf_dir = match cli.command {
+                Commands::Daemon { ref bpf_dir, .. } => bpf_dir.clone(),
+                _ => "/var/lib/kernelradar/bpf".into(),
+            };
+            install_lsm(&EnforcementConfig {
+                selfprotect_enabled:  enf.selfprotect_enabled,
+                bpf_enforce_enabled:  enf.bpf_enforce_enabled,
+                kmod_enforce_enabled: enf.kmod_enforce_enabled,
+                selfprotect_obj_path: format!("{bpf_dir}/selfprotect.bpf.o"),
+                bpf_enforce_obj_path: format!("{bpf_dir}/enforce_bpf.bpf.o"),
+                kmod_enforce_obj_path:format!("{bpf_dir}/enforce_kmod.bpf.o"),
+                bpf_allowlist:        enf.bpf_allowlist.clone(),
+                kmod_allowlist:       enf.kmod_allowlist.clone(),
+            });
         }
     }
 
@@ -508,6 +543,15 @@ severity_filter_alert_or_higher = false  # set true for Slack/Telegram-style noi
 # Tiny HTTP server exposing alerts/bursts/anomalies counters at /metrics.
 enabled     = false
 listen_addr = "127.0.0.1:9100"
+
+[enforcement]
+# DANGER: enabling these LSM hooks can break the system if misconfigured.
+# All defaults are false. Test in audit mode (regular detectors) first.
+selfprotect_enabled  = false   # block kill of kernelradar itself (T-6.4)
+bpf_enforce_enabled  = false   # block BPF_PROG_LOAD by non-allowlisted (T-0.9)
+kmod_enforce_enabled = false   # block kernel module load by non-allowlisted (T-0.9)
+bpf_allowlist        = ["bpftrace", "falco", "kernelradar"]
+kmod_allowlist       = ["modprobe", "kmod", "insmod", "systemd-udevd"]
 
 # Allowlist entries:
 #   "exact"        — match comm or basename(exe)
