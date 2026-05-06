@@ -12,6 +12,7 @@ use std::path::Path;
 use tokio::signal;
 
 use kernelradar_core::event::KrEvent;
+use crate::allowlist::SharedAllowlist;
 use crate::util::{comm_str, is_allowed, make_alert, print_alert, read_exe_path};
 
 /// Ports often associated with reverse shells / C2.
@@ -22,11 +23,11 @@ const SUSPICIOUS_PORTS: &[u16] = &[
 
 pub struct NetworkDetector {
     bpf_obj_path: String,
-    allowlist:    Vec<String>,
+    allowlist:    SharedAllowlist,
 }
 
 impl NetworkDetector {
-    pub fn new(bpf_obj_path: &str, allowlist: Vec<String>) -> Self {
+    pub fn new(bpf_obj_path: &str, allowlist: SharedAllowlist) -> Self {
         Self { bpf_obj_path: bpf_obj_path.to_string(), allowlist }
     }
 
@@ -48,7 +49,7 @@ impl NetworkDetector {
         )?;
 
         tracing::info!(detector = "network",
-                        allowlist_size = self.allowlist.len(),
+                        allowlist_size = self.allowlist.snapshot().len(),
                         "watching connect() to public IPs");
 
         loop {
@@ -71,7 +72,8 @@ impl NetworkDetector {
     fn handle(&self, ev: &KrEvent) {
         let comm = comm_str(ev);
         let exe  = read_exe_path(ev.pid);
-        if is_allowed(&comm, exe.as_deref(), &self.allowlist) { return; }
+        let al   = self.allowlist.snapshot();
+        if is_allowed(&comm, exe.as_deref(), &al) { return; }
 
         // data[0] low 32 bits = (family << 16) | port_be
         // data[1] = ipv4 addr_be

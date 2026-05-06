@@ -4,6 +4,7 @@ use std::path::Path;
 use tokio::signal;
 
 use kernelradar_core::event::KrEvent;
+use crate::allowlist::SharedAllowlist;
 use crate::util::{comm_str, is_allowed, make_alert, print_alert, read_exe_path};
 
 const CLONE_NEWNS:     u64 = 0x00020000;
@@ -28,11 +29,11 @@ fn decode_ns_flags(flags: u64) -> String {
 
 pub struct ContainerDetector {
     bpf_obj_path: String,
-    allowlist:    Vec<String>,
+    allowlist:    SharedAllowlist,
 }
 
 impl ContainerDetector {
-    pub fn new(bpf_obj_path: &str, allowlist: Vec<String>) -> Self {
+    pub fn new(bpf_obj_path: &str, allowlist: SharedAllowlist) -> Self {
         Self { bpf_obj_path: bpf_obj_path.to_string(), allowlist }
     }
 
@@ -61,7 +62,7 @@ impl ContainerDetector {
         )?;
 
         tracing::info!(detector = "container",
-                        allowlist_size = self.allowlist.len(),
+                        allowlist_size = self.allowlist.snapshot().len(),
                         "watching unshare() + setns()");
 
         loop {
@@ -84,7 +85,8 @@ impl ContainerDetector {
     fn handle(&self, ev: &KrEvent) {
         let comm = comm_str(ev);
         let exe  = read_exe_path(ev.pid);
-        if is_allowed(&comm, exe.as_deref(), &self.allowlist) { return; }
+        let al   = self.allowlist.snapshot();
+        if is_allowed(&comm, exe.as_deref(), &al) { return; }
 
         let (title, ctx) = if ev.event_type == 1 {
             let flags = decode_ns_flags(ev.data[0]);

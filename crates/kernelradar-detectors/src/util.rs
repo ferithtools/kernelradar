@@ -22,16 +22,36 @@ pub fn read_exe_path(pid: u32) -> Option<String> {
 }
 
 /// Check whether a process is in the allowlist.
-/// Matches against comm (exact / prefix) or exe path (exact / basename).
+///
+/// Each allowlist entry is matched in this order:
+///   • `/regex/` — Rust regex against comm and basename(exe)
+///   • exact comm or comm prefix
+///   • exact exe path or basename(exe)
 pub fn is_allowed(comm: &str, exe: Option<&str>, allowlist: &[String]) -> bool {
+    let exe_basename = exe.and_then(|p| p.rsplit('/').next());
+
     for entry in allowlist {
-        if entry == comm { return true; }
-        if comm.starts_with(entry.as_str()) { return true; }
-        if let Some(exe_path) = exe {
-            if exe_path == entry.as_str() { return true; }
-            if exe_path.rsplit('/').next() == Some(entry.as_str()) {
-                return true;
+        // Regex: /pattern/
+        if let Some(pat) = entry.strip_prefix('/').and_then(|s| s.strip_suffix('/')) {
+            // Compile once per call. Bad regex is silently ignored
+            // (validate at config load time via Config::validate).
+            if let Ok(re) = regex::Regex::new(pat) {
+                if re.is_match(comm) { return true; }
+                if let Some(b) = exe_basename {
+                    if re.is_match(b) { return true; }
+                }
+                if let Some(p) = exe {
+                    if re.is_match(p) { return true; }
+                }
             }
+            continue;
+        }
+
+        if entry == comm                       { return true; }
+        if comm.starts_with(entry.as_str())    { return true; }
+        if let Some(p) = exe {
+            if p == entry.as_str()              { return true; }
+            if exe_basename == Some(entry.as_str()) { return true; }
         }
     }
     false

@@ -4,15 +4,16 @@ use std::path::Path;
 use tokio::signal;
 
 use kernelradar_core::event::KrEvent;
+use crate::allowlist::SharedAllowlist;
 use crate::util::{comm_str, is_allowed, make_alert, print_alert, read_exe_path};
 
 pub struct PrivEscDetector {
     bpf_obj_path: String,
-    allowlist:    Vec<String>,
+    allowlist:    SharedAllowlist,
 }
 
 impl PrivEscDetector {
-    pub fn new(bpf_obj_path: &str, allowlist: Vec<String>) -> Self {
+    pub fn new(bpf_obj_path: &str, allowlist: SharedAllowlist) -> Self {
         Self { bpf_obj_path: bpf_obj_path.to_string(), allowlist }
     }
 
@@ -42,7 +43,7 @@ impl PrivEscDetector {
         )?;
 
         tracing::info!(detector = "privesc",
-                        allowlist_size = self.allowlist.len(),
+                        allowlist_size = self.allowlist.snapshot().len(),
                         "watching setuid/setgid → root");
 
         loop {
@@ -65,7 +66,8 @@ impl PrivEscDetector {
     fn handle(&self, ev: &KrEvent) {
         let comm = comm_str(ev);
         let exe  = read_exe_path(ev.pid);
-        if is_allowed(&comm, exe.as_deref(), &self.allowlist) { return; }
+        let al   = self.allowlist.snapshot();
+        if is_allowed(&comm, exe.as_deref(), &al) { return; }
 
         let call = if ev.event_type == 1 { "setuid" } else { "setgid" };
         let title = format!(

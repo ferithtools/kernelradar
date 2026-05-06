@@ -1,3 +1,4 @@
+pub mod allowlist;
 pub mod bpf_loader;
 pub mod container;
 pub mod cred;

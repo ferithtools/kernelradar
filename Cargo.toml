@@ -41,6 +41,9 @@ uuid = { version = "1", features = ["v7", "serde"] }
 anyhow  = "1"
 thiserror = "1"
 
+# Regex (used in allowlist matching, T-2.5)
+regex = "1"
+
 # Time
 chrono = { version = "0.4", features = ["serde"] }
 
