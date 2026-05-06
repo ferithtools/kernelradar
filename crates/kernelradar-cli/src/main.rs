@@ -7,11 +7,17 @@ use kernelradar_detectors::{
     privesc::PrivEscDetector,
 };
 
-// Default allowlist covers container runtimes + module management + us
+// Default allowlist covers:
+//   - container runtimes (runc, containerd, dockerd...)
+//   - module management (modprobe, kmod, insmod)
+//   - BPF tooling (bpftrace, falco, kernelradar)
+//   - legitimate setuid users (sshd does privsep, su/sudo/login/polkitd
+//     transition uid by design; PAM/systemd often need root credentials)
 const DEFAULT_ALLOW: &str =
     "runc,containerd,dockerd,podman,crio,\
      modprobe,kmod,insmod,\
-     bpftrace,falco,kernelradar";
+     bpftrace,falco,kernelradar,\
+     sshd,su,sudo,login,polkitd,dbus-daemon,cron,crond,systemd";
 
 #[derive(Parser)]
 #[command(name = "kernelradar")]
@@ -74,7 +80,7 @@ async fn main() -> Result<()> {
             match detector.as_str() {
                 "privesc" => {
                     let mut d = PrivEscDetector::new(
-                        &format!("{bpf_dir}/privesc.bpf.o"));
+                        &format!("{bpf_dir}/privesc.bpf.o"), al);
                     d.json = json;
                     d.run().await?;
                 }
@@ -128,9 +134,9 @@ async fn run_daemon(bpf_dir: &str, allow: &str, json: bool) -> Result<()> {
         println!("Press Ctrl+C to stop.\n");
     }
 
-    let d1 = { let o = format!("{bpf_dir}/privesc.bpf.o");
+    let d1 = { let (o, a) = (format!("{bpf_dir}/privesc.bpf.o"), al.clone());
         tokio::spawn(async move {
-            let mut d = PrivEscDetector::new(&o); d.json = json;
+            let mut d = PrivEscDetector::new(&o, a); d.json = json;
             if let Err(e) = d.run().await { tracing::error!("privesc: {e}"); }
         })
     };

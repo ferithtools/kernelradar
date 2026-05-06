@@ -8,12 +8,13 @@ use crate::util::{comm_str, is_allowed, make_alert, print_alert, read_exe_path};
 
 pub struct PrivEscDetector {
     bpf_obj_path: String,
-    pub json: bool,
+    allowlist:    Vec<String>,
+    pub json:     bool,
 }
 
 impl PrivEscDetector {
-    pub fn new(bpf_obj_path: &str) -> Self {
-        Self { bpf_obj_path: bpf_obj_path.to_string(), json: false }
+    pub fn new(bpf_obj_path: &str, allowlist: Vec<String>) -> Self {
+        Self { bpf_obj_path: bpf_obj_path.to_string(), allowlist, json: false }
     }
 
     pub async fn run(&self) -> Result<()> {
@@ -43,6 +44,7 @@ impl PrivEscDetector {
 
         if !self.json {
             println!("kernelradar privesc: watching setuid/setgid → root");
+            println!("Allowlist: {:?}", self.allowlist);
             println!("Press Ctrl+C to stop.\n");
         }
 
@@ -66,8 +68,8 @@ impl PrivEscDetector {
     fn handle(&self, ev: &KrEvent) {
         let comm = comm_str(ev);
         let exe  = read_exe_path(ev.pid);
-        // Privileged processes doing setuid to root are expected (sudo, PAM)
-        // Only alert on unprivileged → root transitions
+        if is_allowed(&comm, exe.as_deref(), &self.allowlist) { return; }
+
         let call = if ev.event_type == 1 { "setuid" } else { "setgid" };
         let title = format!(
             "{call}(0) — uid {} → 0 by {}",
