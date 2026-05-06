@@ -11,4 +11,6 @@ pub mod metrics;
 pub mod network;
 pub mod output;
 pub mod privesc;
+pub mod prometheus;
 pub mod util;
+pub mod webhook;

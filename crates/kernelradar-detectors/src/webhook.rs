@@ -1,0 +1,89 @@
+/// Webhook output (T-5.3) — HTTP POST per alert.
+///
+/// Async fire-and-forget: each alert spawns a non-blocking POST.
+/// On failure: log and drop. We never let an HTTP backend slow down
+/// the kernel hot path.
+
+use std::sync::OnceLock;
+use std::time::Duration;
+
+use kernelradar_core::alert::Alert;
+
+#[derive(Debug, Clone)]
+pub struct WebhookConfig {
+    pub enabled:       bool,
+    pub url:           String,
+    pub timeout_secs:  u64,
+    /// Optional bearer token / shared secret in `Authorization: Bearer <X>`.
+    pub auth_token:    Option<String>,
+    /// If true, only forward Severity ≥ Alert. Otherwise forward all.
+    pub severity_filter_alert_or_higher: bool,
+}
+
+impl Default for WebhookConfig {
+    fn default() -> Self {
+        Self {
+            enabled:       false,
+            url:           String::new(),
+            timeout_secs:  3,
+            auth_token:    None,
+            severity_filter_alert_or_higher: false,
+        }
+    }
+}
+
+static CONFIG: OnceLock<WebhookConfig> = OnceLock::new();
+static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
+
+pub fn init(config: WebhookConfig) {
+    if !config.enabled || config.url.is_empty() {
+        return;
+    }
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(config.timeout_secs))
+        .user_agent("kernelradar-webhook/0.1")
+        .build()
+        .expect("reqwest client");
+    let _ = CLIENT.set(client);
+    let _ = CONFIG.set(config);
+}
+
+/// Submit an alert to the configured webhook (no-op if disabled).
+pub fn submit(alert: &Alert) {
+    let cfg = match CONFIG.get() { Some(c) => c, None => return };
+    let client = match CLIENT.get() { Some(c) => c, None => return };
+
+    if cfg.severity_filter_alert_or_higher
+       && (alert.severity as u8) < (kernelradar_core::event::Severity::Alert as u8) {
+        return;
+    }
+
+    let payload = match serde_json::to_string(alert) {
+        Ok(s) => s,
+        Err(_) => return,
+    };
+    let url = cfg.url.clone();
+    let auth = cfg.auth_token.clone();
+    let client = client.clone();
+
+    tokio::spawn(async move {
+        let mut req = client.post(&url)
+            .header(reqwest::header::CONTENT_TYPE, "application/json")
+            .body(payload);
+        if let Some(t) = auth {
+            req = req.header(reqwest::header::AUTHORIZATION, format!("Bearer {t}"));
+        }
+        match req.send().await {
+            Ok(resp) if resp.status().is_success() => { /* ok */ }
+            Ok(resp) => {
+                tracing::warn!(status = %resp.status(),
+                                url = %url,
+                                "webhook: non-2xx response");
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, url = %url,
+                                "webhook: send failed");
+            }
+        }
+    });
+}

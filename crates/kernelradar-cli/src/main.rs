@@ -24,6 +24,8 @@ use kernelradar_detectors::{
     network::NetworkDetector,
     output::{detect_systemd_environment, set_output_format, OutputFormat},
     privesc::PrivEscDetector,
+    prometheus::{init as init_prometheus, spawn_server as spawn_prom_server, PromConfig},
+    webhook::{init as init_webhook, WebhookConfig},
 };
 
 const DEFAULT_ALLOW: &str = "runc,containerd,dockerd,podman,crio,\
@@ -41,7 +43,7 @@ const DETECTOR_NAMES: &[&str] = &[
 ];
 
 #[derive(Copy, Clone, Debug, ValueEnum)]
-enum CliFormat { Auto, Plain, Json, Journald }
+enum CliFormat { Auto, Plain, Json, Journald, Falco }
 
 #[derive(Parser)]
 #[command(name = "kernelradar")]
@@ -139,6 +141,7 @@ async fn main() -> Result<()> {
                     "plain"    => OutputFormat::Plain,
                     "json"     => OutputFormat::Json,
                     "journald" => OutputFormat::Journald,
+                    "falco"    => OutputFormat::Falco,
                     _ => if detect_systemd_environment() {
                         OutputFormat::Journald
                     } else {
@@ -150,6 +153,7 @@ async fn main() -> Result<()> {
         CliFormat::Plain    => OutputFormat::Plain,
         CliFormat::Json     => OutputFormat::Json,
         CliFormat::Journald => OutputFormat::Journald,
+        CliFormat::Falco    => OutputFormat::Falco,
     };
     set_output_format(format);
 
@@ -175,13 +179,30 @@ async fn main() -> Result<()> {
                 .with(tracing_subscriber::fmt::layer().json())
                 .init();
         }
-        OutputFormat::Plain => {
+        OutputFormat::Plain | OutputFormat::Falco => {
+            // Falco mode emits its own JSON via println; tracing logs go
+            // to stderr in plain text so they don't pollute the Falco stream.
             tracing_subscriber::registry()
                 .with(env_filter)
-                .with(tracing_subscriber::fmt::layer())
+                .with(tracing_subscriber::fmt::layer().with_writer(std::io::stderr))
                 .init();
         }
     }
+
+    // Initialise webhook (T-5.3)
+    init_webhook(WebhookConfig {
+        enabled:       cfg.webhook.enabled,
+        url:           cfg.webhook.url.clone(),
+        timeout_secs:  cfg.webhook.timeout_secs,
+        auth_token:    cfg.webhook.auth_token.clone(),
+        severity_filter_alert_or_higher: cfg.webhook.severity_filter_alert_or_higher,
+    });
+
+    // Initialise Prometheus (T-5.4)
+    init_prometheus(PromConfig {
+        enabled:     cfg.prometheus.enabled,
+        listen_addr: cfg.prometheus.listen_addr.clone(),
+    });
 
     // Initialise rate limiter from config
     let rl_cfg = &cfg.ratelimit;
@@ -209,6 +230,9 @@ async fn main() -> Result<()> {
         spawn_hourly_summary();
         if cfg.baseline.enabled {
             spawn_periodic_save();
+        }
+        if cfg.prometheus.enabled {
+            spawn_prom_server();
         }
     }
 
@@ -471,6 +495,19 @@ score_threshold    = 3.0     # 3-sigma threshold
 alpha              = 0.10    # EWMA smoothing factor (smaller = more inertia)
 save_path          = "/var/lib/kernelradar/baseline.json"
 save_interval_secs = 300     # save every 5 minutes
+
+[webhook]
+# HTTP POST every alert to a URL (Slack, Telegram-bot, custom SIEM).
+enabled       = false
+url           = ""
+timeout_secs  = 3
+# auth_token  = "secret-bearer"        # adds Authorization: Bearer <token>
+severity_filter_alert_or_higher = false  # set true for Slack/Telegram-style noise control
+
+[prometheus]
+# Tiny HTTP server exposing alerts/bursts/anomalies counters at /metrics.
+enabled     = false
+listen_addr = "127.0.0.1:9100"
 
 # Allowlist entries:
 #   "exact"        — match comm or basename(exe)

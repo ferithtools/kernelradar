@@ -45,8 +45,10 @@ RestrictSUIDSGID=true
 LockPersonality=true
 MemoryDenyWriteExecute=false  # BPF JIT generates executable code
 
-# Network: not needed (only emits to journald). Drop AF_INET if you wish.
-RestrictAddressFamilies=AF_UNIX AF_NETLINK
+# Network: AF_INET[6] required for the optional Prometheus endpoint
+# (T-5.4) and webhook output (T-5.3). Drop them in pure-journald
+# deployments by changing this line to "AF_UNIX AF_NETLINK".
+RestrictAddressFamilies=AF_UNIX AF_NETLINK AF_INET AF_INET6
 
 # Resource limits — keep small, BPF programs are tiny
 MemoryMax=256M

@@ -19,11 +19,52 @@ use std::path::Path;
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Config {
-    pub global:    GlobalConfig,
+    pub global:     GlobalConfig,
     #[serde(rename = "ratelimit")]
-    pub ratelimit: RateLimitTomlConfig,
-    pub baseline:  BaselineTomlConfig,
-    pub detectors: BTreeMap<String, DetectorConfig>,
+    pub ratelimit:  RateLimitTomlConfig,
+    pub baseline:   BaselineTomlConfig,
+    pub webhook:    WebhookTomlConfig,
+    pub prometheus: PromTomlConfig,
+    pub detectors:  BTreeMap<String, DetectorConfig>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct WebhookTomlConfig {
+    pub enabled:       bool,
+    pub url:           String,
+    pub timeout_secs:  u64,
+    pub auth_token:    Option<String>,
+    /// Forward only Severity ≥ Alert when true. Useful for Slack/Telegram.
+    pub severity_filter_alert_or_higher: bool,
+}
+
+impl Default for WebhookTomlConfig {
+    fn default() -> Self {
+        Self {
+            enabled:       false,
+            url:           String::new(),
+            timeout_secs:  3,
+            auth_token:    None,
+            severity_filter_alert_or_higher: false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct PromTomlConfig {
+    pub enabled:     bool,
+    pub listen_addr: String,
+}
+
+impl Default for PromTomlConfig {
+    fn default() -> Self {
+        Self {
+            enabled:     false,
+            listen_addr: "127.0.0.1:9100".into(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -158,9 +199,16 @@ impl Config {
         let mut issues = Vec::new();
 
         match self.global.output_format.as_str() {
-            "auto" | "plain" | "json" | "journald" => {}
+            "auto" | "plain" | "json" | "journald" | "falco" => {}
             other => issues.push(format!("global.output_format = {other:?} \
-                                          (expected auto|plain|json|journald)")),
+                                          (expected auto|plain|json|journald|falco)")),
+        }
+
+        if self.webhook.enabled && self.webhook.url.is_empty() {
+            issues.push("webhook.enabled = true but webhook.url is empty".into());
+        }
+        if self.prometheus.enabled && self.prometheus.listen_addr.is_empty() {
+            issues.push("prometheus.enabled = true but listen_addr is empty".into());
         }
 
         match self.global.log_level.as_str() {

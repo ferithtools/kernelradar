@@ -10,8 +10,9 @@ use kernelradar_core::{
 
 use crate::baseline::record_and_score as baseline_score;
 use crate::dedup::{check as rate_check, Decision};
-use crate::output::{global_output_format, OutputFormat};
+use crate::output::{alert_to_falco_json, global_output_format, OutputFormat};
 use crate::metrics::{record_alert, record_anomaly, record_burst, record_suppressed};
+use crate::webhook::submit as webhook_submit;
 
 static ALERT_ID: AtomicU64 = AtomicU64::new(1);
 
@@ -144,11 +145,19 @@ pub fn print_alert(alert: &Alert, _legacy_json: bool) {
 }
 
 fn emit(alert: &Alert) {
+    // Always submit to webhook (no-op if disabled)
+    webhook_submit(alert);
+
     match global_output_format() {
         OutputFormat::Plain    => emit_plain(alert),
         OutputFormat::Json     => emit_json(alert),
         OutputFormat::Journald => emit_journald(alert),
+        OutputFormat::Falco    => emit_falco(alert),
     }
+}
+
+fn emit_falco(alert: &Alert) {
+    println!("{}", alert_to_falco_json(alert));
 }
 
 /// Emit a synthetic ANOMALY alert when baseline scores high z-score.
