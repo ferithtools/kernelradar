@@ -225,10 +225,21 @@ impl Baseline {
         }
     }
 
-    /// Save baseline to disk (JSON).
-    /// File is written 0640 - readable by owner + kernelradar group only.
-    /// The dump contains every observed (detector, comm) pair on this
-    /// host, which is a system fingerprint and should not be world-readable.
+    /// Save baseline to disk (JSON), symlink-safe.
+    ///
+    /// File is written 0640 - readable by owner + kernelradar group
+    /// only. The dump contains every observed (detector, comm) pair
+    /// on this host, which is a system fingerprint and should not be
+    /// world-readable.
+    ///
+    /// Symlink resilience: the temporary file is opened with
+    /// `O_NOFOLLOW | O_EXCL | O_CREAT` (0600 mode set before any
+    /// content lands) so an attacker who pre-created the tmp path as
+    /// a symlink to a victim file cannot trick the daemon into
+    /// truncating it. After fsync the tmp is renamed onto the final
+    /// path; if the final path is a symlink the rename replaces the
+    /// link itself, which is the correct semantics for an atomic
+    /// publish but still leaves the link target untouched.
     pub fn save(&self) -> std::io::Result<()> {
         let path = PathBuf::from(&self.config.save_path);
         if let Some(parent) = path.parent() {
@@ -236,13 +247,46 @@ impl Baseline {
         }
         let tmp = path.with_extension("json.tmp");
         let text = serde_json::to_string_pretty(self).map_err(std::io::Error::other)?;
-        std::fs::write(&tmp, text)?;
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            // Drop a stale tmp from a previous crash. If it is a
+            // symlink, remove the link, not the target - std::fs::remove_file
+            // on a symlink unlinks the symlink itself, which is what we
+            // want here.
+            let _ = std::fs::remove_file(&tmp);
+
+            // O_NOFOLLOW makes us refuse if `tmp` is a symlink (it
+            // shouldn't exist after the unlink above, but a racing
+            // attacker could re-create it). O_EXCL ensures we are the
+            // creator. O_CLOEXEC keeps the fd from leaking into any
+            // future fork+exec.
+            const O_NOFOLLOW: i32 = 0x20000;
+            const O_CLOEXEC: i32 = 0x80000;
+            let mut f = std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .mode(0o600)
+                .custom_flags(O_NOFOLLOW | O_CLOEXEC)
+                .open(&tmp)?;
+            use std::io::Write;
+            f.write_all(text.as_bytes())?;
+            f.sync_all()?;
+            drop(f);
+        }
+        #[cfg(not(unix))]
+        {
+            // Best-effort on non-unix targets (the daemon is Linux-only,
+            // so this branch is exercised only by `cargo check` on
+            // developer machines).
+            std::fs::write(&tmp, text.as_bytes())?;
+        }
+
         std::fs::rename(&tmp, &path)?;
 
-        // Tighten permissions after the rename. set_permissions on a
-        // freshly-renamed file is the right place - chmod on the tmp would
-        // race with the rename. Failure here is logged but not fatal: the
-        // file still exists, just with whatever umask gave it.
+        // Tighten permissions after the rename to 0640 (was 0600
+        // during the write). Failure here is logged but not fatal.
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
