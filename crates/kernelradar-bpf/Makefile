@@ -7,7 +7,7 @@ SRC     := src
 OUT     := .output
 INCLUDE := include
 
-# When using vmlinux.h, do NOT add kernel UAPI headers — they conflict.
+# When using vmlinux.h, do NOT add kernel UAPI headers - they conflict.
 # vmlinux.h is self-contained and provides all required types.
 BPF_CFLAGS := \
     -g -O2 -Wall \

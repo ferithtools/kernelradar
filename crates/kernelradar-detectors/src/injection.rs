@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Copyright (C) 2026 Ferith Tools
 //
-// Part of the kernelradar project — Linux kernel anomaly detection via BPF.
+// Part of the kernelradar project - Linux kernel anomaly detection via BPF.
 // See LICENSE for terms.
 
 /// Process injection detector.
 ///
-/// Watches ptrace() ATTACH/SEIZE/POKE and process_vm_writev() —
+/// Watches ptrace() ATTACH/SEIZE/POKE and process_vm_writev() -
 /// the three classic mechanisms for cross-process memory manipulation.
 ///
 /// Default allowlist includes well-known debuggers (gdb, lldb, strace)
@@ -89,7 +89,7 @@ impl InjectionDetector {
                 let req = ptrace_request_name(ev.data[0]);
                 let target = ev.data[1] as u32;
                 (
-                    format!("{req} target_pid={target} by {comm} — memory write"),
+                    format!("{req} target_pid={target} by {comm} - memory write"),
                     serde_json::json!({
                         "syscall": "ptrace",
                         "request": req,

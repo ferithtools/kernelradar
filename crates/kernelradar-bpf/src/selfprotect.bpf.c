@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Copyright (C) 2026 Ferith Tools
 //
-// kernelradar — self-protection
+// kernelradar - self-protection
 //
 // LSM hook on task_kill that returns -EPERM when somebody tries to
 // signal kernelradar's own TGID. The protected TGID is held in a

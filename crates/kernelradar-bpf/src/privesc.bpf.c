@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Copyright (C) 2026 Ferith Tools
 //
-// kernelradar — Privilege Escalation Tracker
+// kernelradar - Privilege Escalation Tracker
 //
 // Hooks:
-//   sys_enter_setuid   — uid transition
-//   sys_enter_setgid   — gid transition
+//   sys_enter_setuid   - uid transition
+//   sys_enter_setgid   - gid transition
 //
 // On each call: emit kr_event into the ring buffer so userspace
 // can apply rules (e.g. uid → 0 from unprivileged process = alert).

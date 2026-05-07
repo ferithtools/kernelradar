@@ -2,7 +2,7 @@
 /target/
 **/*.rs.bk
 *.pdb
-# Cargo.lock — committed (binary crate; pin reproducible builds + needed
+# Cargo.lock - committed (binary crate; pin reproducible builds + needed
 # by `rustsec/audit-check` in CI).
 
 # BPF build artifacts
@@ -21,20 +21,20 @@ crates/kernelradar-bpf/.output/
 *.log
 tests/output/
 
-# Secrets — never commit these
+# Secrets - never commit these
 *.pem
 *.key
 config.local.toml
 
-# Release artifacts — checksums are tracked under release-checksums/,
+# Release artifacts - checksums are tracked under release-checksums/,
 # the binary tarball itself is not in git (lives on GitHub Releases).
 /dist/
 ADMIN_README.md  # internal admin doc; never push
 
-# Internal trackers — never commit
+# Internal trackers - never commit
 k-radar_backlog.md
 *.local.md
 
-# Branding assets — kept locally, distributed via GitHub social-preview /
+# Branding assets - kept locally, distributed via GitHub social-preview /
 # release-asset settings, not via the source tree.
 /rc/

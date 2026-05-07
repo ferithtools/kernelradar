@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Copyright (C) 2026 Ferith Tools
 //
-// Part of the kernelradar project — Linux kernel anomaly detection via BPF.
+// Part of the kernelradar project - Linux kernel anomaly detection via BPF.
 // See LICENSE for terms.
 
 //! Rate-limiting + burst detection + exponential backoff.
@@ -9,7 +9,7 @@
 //! Single in-memory state shared across all detectors. The decision is
 //! made for every alert before it is emitted by `print_alert`.
 //!
-//! Key = (detector, comm, event_type) — the same source firing the
+//! Key = (detector, comm, event_type) - the same source firing the
 //! same kind of alert. Rapid repetition is suppressed; persistent
 //! repetition triggers exponential backoff; absolute floods raise a
 //! secondary BURST alert.
@@ -179,7 +179,7 @@ impl RateLimiter {
             if entry.window_count >= cfg.window_max && entry.backoff_steps == 0 {
                 entry.backoff_steps = 1;
             }
-            // Burst even when over rate limit — still a security signal
+            // Burst even when over rate limit - still a security signal
             if burst_triggered {
                 // Force-emit one BURST alert despite limit, but do not
                 // reset entry counters

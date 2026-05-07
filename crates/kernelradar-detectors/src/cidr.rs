@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Copyright (C) 2026 Ferith Tools
 //
-// Part of the kernelradar project — Linux kernel anomaly detection via BPF.
+// Part of the kernelradar project - Linux kernel anomaly detection via BPF.
 // See LICENSE for terms.
 
 //! IPv4 CIDR matcher with hot-reload support, for the network detector's
@@ -26,7 +26,7 @@ pub struct Cidr {
 }
 
 impl Cidr {
-    /// Parse `"a.b.c.d/N"`. Returns None on any malformed input —
+    /// Parse `"a.b.c.d/N"`. Returns None on any malformed input -
     /// caller is expected to log + skip (validation happens at config
     /// load time, but be lenient at runtime).
     pub fn parse(s: &str) -> Option<Self> {
@@ -93,7 +93,7 @@ impl SharedCidrList {
 }
 
 /// Parse a list of CIDR strings into `Vec<Cidr>`. Invalid entries are
-/// logged via `tracing::warn` and skipped — never panics. Returns the
+/// logged via `tracing::warn` and skipped - never panics. Returns the
 /// parsed Vec plus the count of skipped entries (for startup logging).
 ///
 /// Intended for both initial `SharedCidrList::new(parse_all(...).0)`
@@ -106,7 +106,7 @@ pub fn parse_all(items: &[String]) -> (Vec<Cidr>, usize) {
             Some(c) => parsed.push(c),
             None => {
                 tracing::warn!(entry = %s,
-                    "network: invalid CIDR in destination allowlist — skipped");
+                    "network: invalid CIDR in destination allowlist - skipped");
                 skipped += 1;
             }
         }
@@ -138,12 +138,12 @@ mod tests {
         assert_eq!(c.network, ip("10.0.0.0"));
         assert_eq!(c.mask, 0xFF00_0000);
 
-        // /32 — single host
+        // /32 - single host
         let c = Cidr::parse("8.8.8.8/32").unwrap();
         assert_eq!(c.network, ip("8.8.8.8"));
         assert_eq!(c.mask, u32::MAX);
 
-        // /0 — match everything
+        // /0 - match everything
         let c = Cidr::parse("0.0.0.0/0").unwrap();
         assert_eq!(c.network, 0);
         assert_eq!(c.mask, 0);
@@ -181,12 +181,12 @@ mod tests {
 
     #[test]
     fn contains_handles_edge_lens() {
-        // /32 — only the exact host
+        // /32 - only the exact host
         let host = Cidr::parse("8.8.8.8/32").unwrap();
         assert!(host.contains(ip("8.8.8.8")));
         assert!(!host.contains(ip("8.8.8.9")));
 
-        // /0 — matches every IPv4 address
+        // /0 - matches every IPv4 address
         let any = Cidr::parse("0.0.0.0/0").unwrap();
         assert!(any.contains(ip("1.2.3.4")));
         assert!(any.contains(ip("255.255.255.255")));

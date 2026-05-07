@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Copyright (C) 2026 Ferith Tools
 //
-// Part of the kernelradar project — Linux kernel anomaly detection via BPF.
+// Part of the kernelradar project - Linux kernel anomaly detection via BPF.
 // See LICENSE for terms.
 
 use chrono::Utc;
@@ -35,7 +35,7 @@ pub fn read_exe_path(pid: u32) -> Option<String> {
 
 /// Read /proc/<pid>/exe, but only if the current `comm` of that PID
 /// still matches the `comm` captured by BPF at event time. Returns
-/// None if the comm differs — that's the signal that the PID was
+/// None if the comm differs - that's the signal that the PID was
 /// reused or the process execve'd into something else between the
 /// event and userspace catch-up (TOCTOU mitigation).
 ///
@@ -56,10 +56,10 @@ pub fn read_exe_path_verified(pid: u32, ev_comm: &str) -> Option<String> {
 /// Check whether a process is in the allowlist.
 ///
 /// Each allowlist entry is matched in this order:
-///   • `/regex/`           — Rust regex against comm, basename(exe), exe
-///   • exact comm match    — string equality with `comm` (16-char limit)
-///   • exact exe match     — full path equality with `exe`
-///   • exact basename match — equality with last path segment of `exe`
+///   • `/regex/`           - Rust regex against comm, basename(exe), exe
+///   • exact comm match    - string equality with `comm` (16-char limit)
+///   • exact exe match     - full path equality with `exe`
+///   • exact basename match - equality with last path segment of `exe`
 ///
 /// Prefix matching is intentionally NOT supported here. An earlier
 /// version matched on `comm.starts_with(entry)`, which let `"sshd"`
@@ -143,17 +143,17 @@ pub fn make_alert(
 /// Emit an alert through the configured output channel.
 ///
 /// Per-process global format (set once at startup):
-///   Plain    — stdout, human-readable
-///   Json     — stdout, one JSON object per line
-///   Journald — tracing event with structured fields,
+///   Plain    - stdout, human-readable
+///   Json     - stdout, one JSON object per line
+///   Journald - tracing event with structured fields,
 ///              consumed by tracing-journald layer
 pub fn print_alert(alert: &Alert, _legacy_json: bool) {
     // Update baseline + score regardless of rate limit decision.
-    // Suppressed events still feed the model — that IS the model.
+    // Suppressed events still feed the model - that IS the model.
     let z = baseline_score(&alert.detector, &alert.comm);
 
     // Rate limit / burst / backoff. `alert.detector.clone()` is a
-    // pointer copy in the common Cow::Borrowed case — no allocation.
+    // pointer copy in the common Cow::Borrowed case - no allocation.
     let decision = rate_check(
         alert.detector.clone(),
         &alert.comm,
@@ -218,7 +218,7 @@ fn emit_anomaly_marker(orig: &Alert, z: f64) {
         detector: std::borrow::Cow::Owned(format!("{}.anomaly", orig.detector)),
         event_type: orig.event_type,
         title: format!(
-            "ANOMALY: {} {} by {} — z={:.1}σ",
+            "ANOMALY: {} {} by {} - z={:.1}σ",
             orig.detector, orig.event_type, orig.comm, z
         ),
         description: "rate diverges from learned baseline".to_string(),
@@ -278,7 +278,7 @@ fn emit_json(alert: &Alert) {
 }
 
 fn emit_journald(alert: &Alert) {
-    // tracing event — tracing-journald translates structured fields
+    // tracing event - tracing-journald translates structured fields
     // into journald custom fields (DETECTOR=, PID=, etc.) and the
     // message string is the human-readable headline.
     let level = match alert.severity {
@@ -407,7 +407,7 @@ mod tests {
         let al = vec!["sshd".to_string()];
         assert!(is_allowed("sshd", None, &al));
         assert!(!is_allowed("ssh", None, &al));
-        // Prefix matching is intentionally rejected — "sshooly-rev-shell"
+        // Prefix matching is intentionally rejected - "sshooly-rev-shell"
         // must not sneak past an "sshd" allowlist via comm.starts_with.
         assert!(!is_allowed("sshd-session", None, &al));
         assert!(!is_allowed("sshooly", None, &al));

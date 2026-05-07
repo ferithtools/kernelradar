@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Copyright (C) 2026 Ferith Tools
 //
-// Part of the kernelradar project — Linux kernel anomaly detection via BPF.
+// Part of the kernelradar project - Linux kernel anomaly detection via BPF.
 // See LICENSE for terms.
 
 /// Global output format selection.
 ///
-/// • Plain    — colored human text on stdout (interactive use)
-/// • Json     — one JSON object per line (kernelradar native schema)
-/// • Journald — tracing events with structured fields
-/// • Falco    — Falco-compatible JSON schema, one object per line
+/// • Plain    - colored human text on stdout (interactive use)
+/// • Json     - one JSON object per line (kernelradar native schema)
+/// • Journald - tracing events with structured fields
+/// • Falco    - Falco-compatible JSON schema, one object per line
 ///              (see https://falco.org/docs/outputs/formatting/)
 use std::sync::OnceLock;
 
@@ -38,14 +38,14 @@ pub fn detect_systemd_environment() -> bool {
 /// Translate a kernelradar Alert into a Falco-compatible JSON object.
 ///
 /// Falco fields used:
-///   time          — ISO-8601 timestamp
-///   priority      — Falco severity (Emergency..Debug)
-///   rule          — name of the rule that fired
-///   output        — human-readable line
-///   output_fields — map of additional context
-///   source        — "syscall" (closest match for our event sources)
-///   tags          — list of tags for the rule
-///   hostname      — pulled from /etc/hostname
+///   time          - ISO-8601 timestamp
+///   priority      - Falco severity (Emergency..Debug)
+///   rule          - name of the rule that fired
+///   output        - human-readable line
+///   output_fields - map of additional context
+///   source        - "syscall" (closest match for our event sources)
+///   tags          - list of tags for the rule
+///   hostname      - pulled from /etc/hostname
 pub fn alert_to_falco_json(alert: &kernelradar_core::alert::Alert) -> String {
     let priority = match alert.severity {
         kernelradar_core::event::Severity::Critical => "Critical",

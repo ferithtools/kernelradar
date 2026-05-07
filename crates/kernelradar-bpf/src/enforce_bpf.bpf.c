@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Copyright (C) 2026 Ferith Tools
 //
-// kernelradar — bpf-loader enforcement
+// kernelradar - bpf-loader enforcement
 //
 // LSM hook on `bpf` that DENIES BPF_PROG_LOAD when the calling
 // process's `comm` is not in our allowlist map.
@@ -37,7 +37,7 @@ int BPF_PROG(kr_bpf_enforce, int cmd, union bpf_attr *attr, unsigned int size)
         return 0;
 
     /* uid 0 is normally the only one allowed to load anyway, but
-     * let userspace decide via the map — this leaves the door open
+     * let userspace decide via the map - this leaves the door open
      * for delegated unprivileged BPF in the future. */
     struct comm_key k = {};
     bpf_get_current_comm(&k.name, sizeof(k.name));

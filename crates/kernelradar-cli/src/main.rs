@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Copyright (C) 2026 Ferith Tools
 //
-// Part of the kernelradar project — Linux kernel anomaly detection via BPF.
+// Part of the kernelradar project - Linux kernel anomaly detection via BPF.
 // See LICENSE for terms.
 
 mod bootstrap;
@@ -439,7 +439,7 @@ async fn run_daemon(bpf_dir: &str, cli_allow: &str, config_path: &str, cfg: &Con
     spawn_detector!("kmod", "kmod.bpf.o", KmodDetector);
     spawn_detector!("fim", "fim.bpf.o", FimDetector);
 
-    // network — needs the destination CIDR allowlist, spawn explicitly
+    // network - needs the destination CIDR allowlist, spawn explicitly
     if cfg.detector_enabled("network") {
         let obj = format!("{dir}/network.bpf.o");
         let al = shared.get("network").cloned().unwrap();
@@ -456,12 +456,12 @@ async fn run_daemon(bpf_dir: &str, cli_allow: &str, config_path: &str, cfg: &Con
     spawn_detector!("injection", "injection.bpf.o", InjectionDetector);
     spawn_detector!("cred", "cred.bpf.o", CredDetector);
 
-    // SIGHUP handler — re-load config and update allowlists + CIDRs
+    // SIGHUP handler - re-load config and update allowlists + CIDRs
     spawn_sighup_handler(config_path.to_string(), shared, fallback, cidrs);
 
     // Each detector listens for SIGINT internally and breaks its loop,
     // so on Ctrl+C every join handle resolves nearly simultaneously.
-    // We wait for ALL of them — a previous "wait for any" implementation
+    // We wait for ALL of them - a previous "wait for any" implementation
     // silently dropped the survivors when the first one finished.
     await_all_detectors(handles).await;
     tracing::info!("kernelradar daemon stopped");
@@ -489,7 +489,7 @@ fn spawn_sighup_handler(
                 if sig.recv().await.is_none() {
                     break;
                 }
-                tracing::info!(config = %config_path, "SIGHUP received — reloading config");
+                tracing::info!(config = %config_path, "SIGHUP received - reloading config");
                 match Config::from_path(&config_path) {
                     Ok(new_cfg) => {
                         let issues = new_cfg.validate();
@@ -497,7 +497,7 @@ fn spawn_sighup_handler(
                             for i in issues {
                                 tracing::error!("config issue: {i}");
                             }
-                            tracing::warn!("reload aborted — fix config first");
+                            tracing::warn!("reload aborted - fix config first");
                             continue;
                         }
                         for (name, sl) in &shared {
@@ -531,7 +531,7 @@ fn spawn_sighup_handler(
 ///
 /// All detectors break their inner loop on SIGINT, so on a normal
 /// Ctrl+C every handle resolves shortly after each other. Iterating
-/// in spawn order is fine — `tokio::JoinHandle::await` doesn't block
+/// in spawn order is fine - `tokio::JoinHandle::await` doesn't block
 /// the runtime, the other tasks keep running until they too complete.
 async fn await_all_detectors(handles: Vec<tokio::task::JoinHandle<()>>) {
     for h in handles {
@@ -539,7 +539,7 @@ async fn await_all_detectors(handles: Vec<tokio::task::JoinHandle<()>>) {
     }
 }
 
-const EXAMPLE_CONFIG: &str = r#"# /etc/kernelradar/config.toml — example
+const EXAMPLE_CONFIG: &str = r#"# /etc/kernelradar/config.toml - example
 
 [global]
 log_level     = "info"
@@ -576,7 +576,7 @@ severity_filter_alert_or_higher = false  # set true for Slack/Telegram-style noi
 
 [prometheus]
 # Tiny HTTP server exposing alerts/bursts/anomalies counters at /metrics.
-# Port 9101 (not 9100) — node_exporter owns 9100 on every host running the
+# Port 9101 (not 9100) - node_exporter owns 9100 on every host running the
 # prometheus stack, and silent collisions cause confusing scrape failures.
 enabled     = false
 listen_addr = "127.0.0.1:9101"
@@ -594,11 +594,11 @@ kmod_allowlist       = ["modprobe", "kmod", "insmod", "systemd-udevd"]
 # BPF object SHA-256 verification. Build-time hashes are embedded into
 # the binary; at load time the bytes on disk are re-hashed.
 #
-#   strict_mode = false  (default)  — mismatch logs an error, daemon
+#   strict_mode = false  (default)  - mismatch logs an error, daemon
 #                                     keeps loading. Friendly for ad-hoc
 #                                     `cd crates/kernelradar-bpf && make`
 #                                     after install.
-#   strict_mode = true              — mismatch refuses to load. Use this
+#   strict_mode = true              - mismatch refuses to load. Use this
 #                                     in production when you ship the
 #                                     prebuilt .bpf.o files alongside
 #                                     the binary and want strict drift
@@ -607,7 +607,7 @@ strict_mode = false
 
 [network]
 # Destination CIDR allowlist. connect() to addresses inside any of
-# these CIDRs is suppressed before process-allowlist evaluation —
+# these CIDRs is suppressed before process-allowlist evaluation -
 # cheaper (no /proc/<pid>/exe lookup) and more reliable than
 # allowlisting every process that legitimately calls home.
 #
@@ -615,14 +615,14 @@ strict_mode = false
 #   "149.154.0.0/16"   # Telegram (api.telegram.org et al.)
 #   "64.233.160.0/19"  # Google APIs (one of many ranges)
 #   "172.65.0.0/16"    # Cloudflare
-#   "13.0.0.0/8"       # AWS (very broad — only if you trust everything calling AWS)
+#   "13.0.0.0/8"       # AWS (very broad - only if you trust everything calling AWS)
 #
-# IPv4 only for now — IPv6 destinations always alert.
+# IPv4 only for now - IPv6 destinations always alert.
 destination_cidr_allowlist = []
 
 # Allowlist entries:
-#   "exact"        — match comm or basename(exe)
-#   "/regex.*/"    — Rust regex against comm/exe
+#   "exact"        - match comm or basename(exe)
+#   "/regex.*/"    - Rust regex against comm/exe
 #
 # Detector-specific allowlists override the global default.
 
@@ -652,10 +652,10 @@ enabled = true
 [detectors.network]
 enabled   = true
 # Tip: real production servers carry monitoring agents and data-collection
-# scripts that connect frequently — without allowlisting them you drown in
+# scripts that connect frequently - without allowlisting them you drown in
 # legitimate traffic. Identify yours via `journalctl -u kernelradar -o cat`,
 # look at the connect→ ... by <comm> lines, then add comm names here.
-# Alternative: whitelist destinations (CIDRs) under [network] above —
+# Alternative: whitelist destinations (CIDRs) under [network] above -
 # better when many processes legitimately reach the same external service
 # (Telegram, Google, Cloudflare).
 allowlist = [

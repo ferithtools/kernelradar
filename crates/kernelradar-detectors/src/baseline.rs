@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Copyright (C) 2026 Ferith Tools
 //
-// Part of the kernelradar project — Linux kernel anomaly detection via BPF.
+// Part of the kernelradar project - Linux kernel anomaly detection via BPF.
 // See LICENSE for terms.
 
 /// Adaptive baseline with sigma-based anomaly scoring.
@@ -42,7 +42,7 @@ pub struct BaselineConfig {
     /// containers, fuzzing, or hostile flooding under many fake comms.
     ///
     /// `serde(default)` so a baseline.json written by an older build
-    /// (without these fields) still deserialises — the field gets
+    /// (without these fields) still deserialises - the field gets
     /// `BaselineConfig::default().pairs_max` instead of failing.
     #[serde(default = "default_pairs_max")]
     pub pairs_max: usize,
@@ -77,7 +77,7 @@ impl Default for BaselineConfig {
 pub struct HourBucket {
     /// EWMA of count-per-minute
     sum: f64,
-    /// EWMA of (count-per-minute)^2 — for variance approximation
+    /// EWMA of (count-per-minute)^2 - for variance approximation
     sumsq: f64,
     /// Number of minute observations recorded into this bucket
     samples: u64,
@@ -166,7 +166,7 @@ impl Baseline {
             let before = self.pairs.len();
             self.pairs
                 .retain(|_, p| p.last_seen.is_some_and(|t| t > cutoff));
-            // Drop matching cur_minute entries too — otherwise that map
+            // Drop matching cur_minute entries too - otherwise that map
             // would be the new unbounded leak.
             let live: std::collections::HashSet<_> = self.pairs.keys().cloned().collect();
             self.cur_minute.retain(|k, _| live.contains(k));
@@ -226,7 +226,7 @@ impl Baseline {
     }
 
     /// Save baseline to disk (JSON).
-    /// File is written 0640 — readable by owner + kernelradar group only.
+    /// File is written 0640 - readable by owner + kernelradar group only.
     /// The dump contains every observed (detector, comm) pair on this
     /// host, which is a system fingerprint and should not be world-readable.
     pub fn save(&self) -> std::io::Result<()> {
@@ -240,7 +240,7 @@ impl Baseline {
         std::fs::rename(&tmp, &path)?;
 
         // Tighten permissions after the rename. set_permissions on a
-        // freshly-renamed file is the right place — chmod on the tmp would
+        // freshly-renamed file is the right place - chmod on the tmp would
         // race with the rename. Failure here is logged but not fatal: the
         // file still exists, just with whatever umask gave it.
         #[cfg(unix)]
@@ -251,7 +251,7 @@ impl Baseline {
                 tracing::warn!(
                     error = %e,
                     path = %self.config.save_path,
-                    "baseline: could not chmod 0640 — file may be world-readable"
+                    "baseline: could not chmod 0640 - file may be world-readable"
                 );
             }
         }
@@ -320,7 +320,7 @@ pub fn init_with_config(config: BaselineConfig) {
 }
 
 fn lock() -> std::sync::MutexGuard<'static, Baseline> {
-    // On poison we keep going — baseline is best-effort statistical
+    // On poison we keep going - baseline is best-effort statistical
     // data, the panic that poisoned the mutex was already reported. A
     // potentially-inconsistent record is preferable to a daemon-wide crash.
     GLOBAL

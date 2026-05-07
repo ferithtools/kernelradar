@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Copyright (C) 2026 Ferith Tools
 //
-// Part of the kernelradar project — Linux kernel anomaly detection via BPF.
+// Part of the kernelradar project - Linux kernel anomaly detection via BPF.
 // See LICENSE for terms.
 
-//! Daemon bootstrap helpers — wiring the runtime services from `Config`.
+//! Daemon bootstrap helpers - wiring the runtime services from `Config`.
 //!
 //! Lives outside `main.rs` so the entry point reads as the CLI control flow
 //! rather than as a long sequence of subsystem initialisers.
@@ -34,7 +34,7 @@ pub fn init_runtime_services(cfg: &Config, is_daemon: bool) {
     // Must happen before any detector calls verify_bpf().
     kernelradar_detectors::integrity::set_strict_mode(cfg.integrity.strict_mode);
     if cfg.integrity.strict_mode {
-        tracing::info!("BPF integrity check: strict mode ON — mismatch refuses to load");
+        tracing::info!("BPF integrity check: strict mode ON - mismatch refuses to load");
     }
 
     init_webhook(WebhookConfig {
@@ -85,7 +85,7 @@ pub fn init_runtime_services(cfg: &Config, is_daemon: bool) {
 
 /// Run startup capability and BPF-directory permission checks.
 ///
-/// Failures are logged as warnings but never abort startup — admins
+/// Failures are logged as warnings but never abort startup - admins
 /// running in degraded environments (kernels without `CAP_BPF`, custom
 /// `bpf_dir` paths) still get a daemon, just with reduced guarantees.
 pub fn run_preflight(bpf_dir: &str) {
@@ -95,7 +95,7 @@ pub fn run_preflight(bpf_dir: &str) {
 
 /// Install LSM enforcement objects (selfprotect, enforce_bpf, enforce_kmod)
 /// when at least one is enabled in config. All failures are logged but
-/// never propagated — the LSM stack is opt-in and never aborts the daemon.
+/// never propagated - the LSM stack is opt-in and never aborts the daemon.
 pub fn install_lsm_if_enabled(cfg: &Config, bpf_dir: &str) {
     let enf = &cfg.enforcement;
     if !(enf.selfprotect_enabled || enf.bpf_enforce_enabled || enf.kmod_enforce_enabled) {

@@ -1,4 +1,4 @@
-# kernelradar — top-level orchestration Makefile
+# kernelradar - top-level orchestration Makefile
 # Wraps cargo + BPF build + system installation.
 
 PREFIX     ?= /usr/local
@@ -24,7 +24,7 @@ all: bpf rust
 bpf:
 	$(MAKE) -C $(BPF_DIR)
 
-# rust depends on bpf — the userspace `build.rs` hashes the .bpf.o
+# rust depends on bpf - the userspace `build.rs` hashes the .bpf.o
 # files at compile time for integrity verification. Without this
 # ordering, a first-time `make rust` records empty hashes and the
 # daemon logs "no build-time hash recorded" at every startup.

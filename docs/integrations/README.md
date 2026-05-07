@@ -1,4 +1,4 @@
-# kernelradar — Integrations
+# kernelradar - Integrations
 
 kernelradar is built around four output channels. Pick the one(s) that
 fit your stack:
@@ -12,8 +12,8 @@ fit your stack:
 
 Specific guides:
 
-- [Wazuh](wazuh.md)              — ship JSON via Wazuh agent
-- [Slack & Telegram](slack-telegram.md) — webhook recipes
-- [Loki / Vector / Fluentbit](loki-vector-fluentbit.md) — log shipping
-- [Prometheus + Alertmanager](prometheus.md) — metrics monitoring
-- [Falco compatibility](falco.md) — output format & schema mapping
+- [Wazuh](wazuh.md)              - ship JSON via Wazuh agent
+- [Slack & Telegram](slack-telegram.md) - webhook recipes
+- [Loki / Vector / Fluentbit](loki-vector-fluentbit.md) - log shipping
+- [Prometheus + Alertmanager](prometheus.md) - metrics monitoring
+- [Falco compatibility](falco.md) - output format & schema mapping

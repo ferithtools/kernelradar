@@ -9,23 +9,23 @@ For full guidelines see CONTRIBUTING.md.
 
 ## Linked issue / task
 
-<!-- "Closes #N" / "Refs #N" — leave blank if it's a drive-by fix
+<!-- "Closes #N" / "Refs #N" - leave blank if it's a drive-by fix
      that doesn't have an issue. -->
 
 ## Type of change
 
-- [ ] `feat` — new feature
-- [ ] `fix` — bug fix
-- [ ] `docs` — docs / comments only
-- [ ] `chore` — tooling, deps, project metadata
-- [ ] `build` — packaging / Makefile / CI
-- [ ] `refactor` — non-behavioural code change
-- [ ] `release` — version bump / tag prep
+- [ ] `feat` - new feature
+- [ ] `fix` - bug fix
+- [ ] `docs` - docs / comments only
+- [ ] `chore` - tooling, deps, project metadata
+- [ ] `build` - packaging / Makefile / CI
+- [ ] `refactor` - non-behavioural code change
+- [ ] `release` - version bump / tag prep
 
 ## How was this tested?
 
 <!-- Describe what you actually ran. "cargo test" alone is not
-     enough for behavioural changes — show the manual repro you did
+     enough for behavioural changes - show the manual repro you did
      to convince yourself it works. -->
 
 ```text

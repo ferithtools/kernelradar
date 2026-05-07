@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Copyright (C) 2026 Ferith Tools
 //
-// Part of the kernelradar project — Linux kernel anomaly detection via BPF.
+// Part of the kernelradar project - Linux kernel anomaly detection via BPF.
 // See LICENSE for terms.
 
 /// Credential theft detector.
@@ -131,7 +131,7 @@ impl CredDetector {
 
     fn handle(&self, ev: &KrEvent) {
         // Path is packed into data[0..4] as 32 NUL-terminated raw bytes by
-        // the BPF side. Reassemble word-by-word — same native endianness as
+        // the BPF side. Reassemble word-by-word - same native endianness as
         // the BPF write, no `unsafe` needed.
         let mut path_bytes = [0u8; 32];
         for (i, word) in ev.data.iter().enumerate() {

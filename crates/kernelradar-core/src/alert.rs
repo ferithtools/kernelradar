@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Copyright (C) 2026 Ferith Tools
 //
-// Part of the kernelradar project — Linux kernel anomaly detection via BPF.
+// Part of the kernelradar project - Linux kernel anomaly detection via BPF.
 // See LICENSE for terms.
 
 use crate::event::Severity;
@@ -14,7 +14,7 @@ use uuid::Uuid;
 pub struct Alert {
     /// Sequential local id (per-process)
     pub id: u64,
-    /// UUID v7 — timestamp-prefixed, sortable, unique across instances
+    /// UUID v7 - timestamp-prefixed, sortable, unique across instances
     pub correlation_id: Uuid,
     pub timestamp: DateTime<Utc>,
     pub severity: Severity,

@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Copyright (C) 2026 Ferith Tools
 //
-// kernelradar — Container Escape Detector
+// kernelradar - Container Escape Detector
 //
 // Watches two syscalls that are classic signals of namespace-based
 // container escape attempts:
 //
-//   sys_enter_unshare — create new namespaces (detach from container)
-//   sys_enter_setns   — join a different namespace (pivot to host)
+//   sys_enter_unshare - create new namespaces (detach from container)
+//   sys_enter_setns   - join a different namespace (pivot to host)
 //
 // Both are tracepoints: read-only, no blocking.
 
@@ -67,7 +67,7 @@ static __always_inline void emit(struct trace_event_raw_sys_enter *ctx,
     bpf_ringbuf_submit(e, 0);
 }
 
-/* Catch unshare() — creating new namespaces */
+/* Catch unshare() - creating new namespaces */
 SEC("tracepoint/syscalls/sys_enter_unshare")
 int kr_tp_unshare(struct trace_event_raw_sys_enter *ctx)
 {
@@ -84,7 +84,7 @@ int kr_tp_unshare(struct trace_event_raw_sys_enter *ctx)
     return 0;
 }
 
-/* Catch setns() — joining a different namespace */
+/* Catch setns() - joining a different namespace */
 SEC("tracepoint/syscalls/sys_enter_setns")
 int kr_tp_setns(struct trace_event_raw_sys_enter *ctx)
 {

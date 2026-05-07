@@ -6,18 +6,18 @@
 
 Use either of these private channels:
 
-- **GitHub Security Advisories** —
+- **GitHub Security Advisories** -
   [open a draft advisory](https://github.com/ferithtools/kernelradar/security/advisories/new)
   on this repository. This is the preferred path: GitHub gates the
   conversation, lets us collaborate on a CVE, and produces a public
   advisory we can ship together with the fix.
-- **Email** — `ferithtools@users.noreply.github.com` (this is a
-  GitHub-routed address; nothing fancy, no PGP key advertised yet —
+- **Email** - `ferithtools@users.noreply.github.com` (this is a
+  GitHub-routed address; nothing fancy, no PGP key advertised yet -
   one will be added before v0.2).
 
 Please include, at minimum:
 
-- the affected version (`kernelradar --version` output is ideal —
+- the affected version (`kernelradar --version` output is ideal -
   it carries the git SHA);
 - the kernel + distribution you reproduced on;
 - a minimal repro or, if a full PoC is risky, a description of the
@@ -32,7 +32,7 @@ is coordinated: by default we publish the advisory + fix together.
 ## Supported versions
 
 Until v1.0 this project is pre-1.0; only the latest minor line
-receives security fixes. After v1.0 (planned Q1 2027 — see
+receives security fixes. After v1.0 (planned Q1 2027 - see
 [`README.md`](README.md#roadmap-2026)) the LTS branch will be
 maintained for 12 months.
 
@@ -56,7 +56,7 @@ Findings we treat as security:
   tampered BPF object in `strict_mode = true`).
 - LSM enforcement holes (`enforce_bpf` / `enforce_kmod` /
   `selfprotect` letting through what they advertise blocking).
-- Information-disclosure surfaces — webhook URL leaks, config file
+- Information-disclosure surfaces - webhook URL leaks, config file
   world-read, baseline file world-read, pinned BPF map readability.
 - Supply-chain attacks against the release artifacts (mismatch
   between in-repo SHA pin and shipped tarball is a security event;
@@ -70,7 +70,7 @@ Findings we treat as security:
   designed to be deployed by a defender on a host they control.
 - `panic`s in detector hot paths from genuinely malformed kernel
   events (these are bugs, but treated as ordinary bugs unless the
-  panic gives an attacker a useful primitive — usually it just
+  panic gives an attacker a useful primitive - usually it just
   crashes the daemon, which then auto-restarts under systemd).
 - Findings that require pre-existing root on the target host. Once
   an attacker has root, kernelradar's threat model assumes they can

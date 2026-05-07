@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Copyright (C) 2026 Ferith Tools
 //
-// Part of the kernelradar project — Linux kernel anomaly detection via BPF.
+// Part of the kernelradar project - Linux kernel anomaly detection via BPF.
 // See LICENSE for terms.
 
 use anyhow::Result;
@@ -51,7 +51,7 @@ impl PrivEscDetector {
         } else {
             "setgid"
         };
-        let title = format!("{call}(0) — uid {} → 0 by {}", ev.data[0], comm);
+        let title = format!("{call}(0) - uid {} → 0 by {}", ev.data[0], comm);
         let ctx = serde_json::json!({
             "call":    call,
             "old_id":  ev.data[0],

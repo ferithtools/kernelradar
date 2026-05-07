@@ -71,10 +71,10 @@ Info                   →   Informational
 
 ## What kernelradar does NOT emit
 
-- No mutex on `proc.aname[N]`, `proc.cmdline`, etc. — kernelradar tracks
+- No mutex on `proc.aname[N]`, `proc.cmdline`, etc. - kernelradar tracks
   `comm` (16-byte truncated process name) and `exe` (resolved from
   `/proc/PID/exe`). The full ancestor chain is out of scope today.
 - No file FD ancestry; FIM events have the path only.
 
 For pipelines that need richer process metadata, run Falco alongside
-kernelradar — they complement each other.
+kernelradar - they complement each other.

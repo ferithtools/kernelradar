@@ -1,19 +1,19 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Copyright (C) 2026 Ferith Tools
 //
-// Part of the kernelradar project — Linux kernel anomaly detection via BPF.
+// Part of the kernelradar project - Linux kernel anomaly detection via BPF.
 // See LICENSE for terms.
 
 /// LSM enforcement and self-protection.
 ///
 /// Loads BPF LSM programs that DENY operations:
-///   • selfprotect.bpf.o      — block kill of kernelradar itself
-///   • enforce_bpf.bpf.o      — block BPF_PROG_LOAD by non-allowlisted comms
-///   • enforce_kmod.bpf.o     — block kernel module load by non-allowlisted comms
+///   • selfprotect.bpf.o      - block kill of kernelradar itself
+///   • enforce_bpf.bpf.o      - block BPF_PROG_LOAD by non-allowlisted comms
+///   • enforce_kmod.bpf.o     - block kernel module load by non-allowlisted comms
 ///
 /// All three are OFF by default. Enable with explicit config opt-in.
 /// On enabled-but-failed-load we LOG the error and continue running
-/// in observe-only mode — never abort the daemon.
+/// in observe-only mode - never abort the daemon.
 use anyhow::{Context, Result};
 use aya::{
     maps::{Array, HashMap, MapData},
@@ -71,7 +71,7 @@ struct LoadedLsm {
 
 static LOADED: OnceLock<std::sync::Mutex<Option<LoadedLsm>>> = OnceLock::new();
 
-/// Load and attach LSM programs as configured. Always Ok — failures
+/// Load and attach LSM programs as configured. Always Ok - failures
 /// are logged but never propagate, so the daemon keeps running.
 pub fn install(cfg: &EnforcementConfig) {
     let mut state = LoadedLsm {
@@ -145,7 +145,7 @@ fn load_lsm(path: &str, btf: &Btf, detector: &str, prog_name: &'static str) -> R
     let bytes = std::fs::read(Path::new(path)).with_context(|| format!("read {path}"))?;
 
     // LSM is the last line of defense. Integrity-check the BPF object
-    // before loading — same policy as the observation detectors.
+    // before loading - same policy as the observation detectors.
     verify_bpf(detector, &bytes)?;
 
     let mut bpf = Ebpf::load(&bytes).context("verifier rejected LSM program")?;

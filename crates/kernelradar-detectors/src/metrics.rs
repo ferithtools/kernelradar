@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Copyright (C) 2026 Ferith Tools
 //
-// Part of the kernelradar project — Linux kernel anomaly detection via BPF.
+// Part of the kernelradar project - Linux kernel anomaly detection via BPF.
 // See LICENSE for terms.
 
 //! Alert counters and hourly summary.
 //!
 //! Detector names enter the counters as `Cow<'static, str>` and arrive
-//! `Cow::Borrowed("privesc")` from the detector crate's literals — both
+//! `Cow::Borrowed("privesc")` from the detector crate's literals - both
 //! cloning into the BTreeMap key and looking up an existing key are
 //! pointer-copy cheap, so the hot path stays allocation-free. Synthetic
 //! variants (`"privesc.anomaly"`, `"…burst"`) arrive `Cow::Owned`, which
@@ -75,7 +75,7 @@ pub fn record_anomaly(detector: Det) {
 pub fn spawn_hourly_summary() {
     tokio::spawn(async {
         let mut interval = tokio::time::interval(Duration::from_secs(3600));
-        // Skip the immediate first tick — wait one hour before first report
+        // Skip the immediate first tick - wait one hour before first report
         interval.tick().await;
         loop {
             interval.tick().await;

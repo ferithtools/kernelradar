@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Copyright (C) 2026 Ferith Tools
 //
-// kernelradar — Process injection detector
+// kernelradar - Process injection detector
 //
 // Hooks:
-//   sys_enter_ptrace            — only emit for ATTACH/SEIZE/POKE*
+//   sys_enter_ptrace            - only emit for ATTACH/SEIZE/POKE*
 //                                 (read-side requests are noisy and
 //                                 mostly debugger activity)
-//   sys_enter_process_vm_writev — modern cross-process memory write
+//   sys_enter_process_vm_writev - modern cross-process memory write
 //
 // Both are read-only tracepoints, no enforcement, no blocking.
 
@@ -93,7 +93,7 @@ int kr_tp_ptrace(struct trace_event_raw_sys_enter *ctx)
         return 0;
     }
 
-    /* PEEK*, CONT, DETACH, KILL, TRACEME — not in scope for first cut */
+    /* PEEK*, CONT, DETACH, KILL, TRACEME - not in scope for first cut */
     return 0;
 }
 

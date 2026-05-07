@@ -1,4 +1,4 @@
-# kernelradar — Performance
+# kernelradar - Performance
 
 All numbers below were collected on the lowest-spec hardware that
 kernelradar is officially supported on, to give you a worst-case
@@ -66,7 +66,7 @@ real attack scenario you'd see at most 100s of events/sec, all of
 which userspace handles comfortably.
 
 The drops are visible via `kernelradar_*_dropped_total` Prometheus
-counters — this is operationally important: an admin can
+counters - this is operationally important: an admin can
 distinguish "no attacks detected" from "we're losing events".
 
 ### Graceful shutdown
@@ -162,6 +162,6 @@ enabled = false
 Or if you want lower memory:
 
 ```toml
-# Increase BPF ringbuf size? — currently a compile-time 256 KB.
+# Increase BPF ringbuf size? - currently a compile-time 256 KB.
 # Disable heavy detectors (cred, fim) on systems that don't need them.
 ```

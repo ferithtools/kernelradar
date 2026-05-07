@@ -40,7 +40,7 @@ kernelradar/
     │                          # Compiled objects embedded in Rust via include_bytes!
     │
     ├── kernelradar-core/      # Shared types: Event, Alert, Severity, Config
-    │                          # No BPF or OS dependencies — pure data types
+    │                          # No BPF or OS dependencies - pure data types
     │
     ├── kernelradar-detectors/ # One module per detector
     │   ├── privesc.rs         # Detector 1: privilege transitions
@@ -86,7 +86,7 @@ Userspace maps to a Rust mirror type in `kernelradar-core`.
 
 ## Detection engine
 
-Two modes — both run simultaneously:
+Two modes - both run simultaneously:
 
 **Rule-based (deterministic, fast path)**
 - Hand-written conditions checked per-event
@@ -124,7 +124,7 @@ learn_duration_hours = 48
 
 ## Build requirements
 
-Both halves of the build require Linux (or WSL2) — the BPF objects
+Both halves of the build require Linux (or WSL2) - the BPF objects
 need a clang capable of `target=bpf` and the kernel's BTF type info,
 and the userspace `build.rs` hashes the freshly built `.bpf.o` files
 for integrity verification. Build artifacts (`.bpf.o`, `target/`)
@@ -144,5 +144,5 @@ make    # builds BPF objects, then the userspace daemon
 ```
 
 The top-level Makefile orders BPF before Rust deliberately so the
-integrity table picks up real hashes — running `cargo build`
+integrity table picks up real hashes - running `cargo build`
 directly logs "no build-time hash recorded" at every startup.

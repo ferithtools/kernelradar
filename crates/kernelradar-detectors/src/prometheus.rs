@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Copyright (C) 2026 Ferith Tools
 //
-// Part of the kernelradar project — Linux kernel anomaly detection via BPF.
+// Part of the kernelradar project - Linux kernel anomaly detection via BPF.
 // See LICENSE for terms.
 
 /// Prometheus /metrics endpoint.
 ///
-/// Tiny HTTP server (tokio TcpListener — no external HTTP framework).
+/// Tiny HTTP server (tokio TcpListener - no external HTTP framework).
 /// Serves the Prometheus text exposition format on
 ///   GET /metrics
 ///   GET /healthz

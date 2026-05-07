@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Copyright (C) 2026 Ferith Tools
 //
-// Part of the kernelradar project — Linux kernel anomaly detection via BPF.
+// Part of the kernelradar project - Linux kernel anomaly detection via BPF.
 // See LICENSE for terms.
 
 /// Compute SHA-256 hashes of the BPF object files at build time.
@@ -9,7 +9,7 @@
 /// that the runtime loader uses to verify integrity.
 ///
 /// If a .bpf.o file is absent at build time we record an empty hash
-/// — the loader will then accept any bytes, with a warning. This
+/// - the loader will then accept any bytes, with a warning. This
 /// avoids breaking `cargo check` when BPF objects haven't been built.
 use std::env;
 use std::fs;
@@ -83,7 +83,7 @@ pub const BPF_HASHES: &[(&str, &str)] = &[
 }
 
 fn chrono_now() -> String {
-    // Avoid pulling chrono into build deps — use SystemTime. A clock skewed
+    // Avoid pulling chrono into build deps - use SystemTime. A clock skewed
     // back before the epoch would not be a fatal build error, just an
     // uninformative timestamp string.
     use std::time::{SystemTime, UNIX_EPOCH};

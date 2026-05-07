@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Copyright (C) 2026 Ferith Tools
 //
-// Part of the kernelradar project — Linux kernel anomaly detection via BPF.
+// Part of the kernelradar project - Linux kernel anomaly detection via BPF.
 // See LICENSE for terms.
 
 use serde::{Deserialize, Serialize};
@@ -49,7 +49,7 @@ pub struct IntegrityTomlConfig {
     pub strict_mode: bool,
 }
 
-/// Network-detector tunables. Currently a destination CIDR allowlist —
+/// Network-detector tunables. Currently a destination CIDR allowlist -
 /// connect() to any address inside one of these CIDRs is suppressed
 /// before process-allowlist evaluation. IPv4 only for now.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -62,7 +62,7 @@ pub struct NetworkTomlConfig {
     pub destination_cidr_allowlist: Vec<String>,
 }
 
-/// LSM enforcement and self-protection. All flags default to false —
+/// LSM enforcement and self-protection. All flags default to false -
 /// enabling these can break the system.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
@@ -239,7 +239,7 @@ pub enum ConfigError {
 }
 
 impl Config {
-    /// Load TOML config from path. Returns NotFound if missing — caller
+    /// Load TOML config from path. Returns NotFound if missing - caller
     /// decides whether that's fatal or use defaults.
     pub fn from_path(path: &str) -> Result<Self, ConfigError> {
         let p = Path::new(path);
@@ -289,7 +289,7 @@ impl Config {
 
         match self.global.log_level.as_str() {
             "trace" | "debug" | "info" | "warn" | "error" | "off" => {}
-            // Composite RUST_LOG strings are also fine — pass through
+            // Composite RUST_LOG strings are also fine - pass through
             s if s.contains('=') || s.contains(',') => {}
             other => issues.push(format!(
                 "global.log_level = {other:?} \
@@ -331,7 +331,7 @@ impl Config {
             }
         }
 
-        // Validate CIDR strings — same syntactic shape detectors/cidr.rs
+        // Validate CIDR strings - same syntactic shape detectors/cidr.rs
         // will accept at runtime. Keep the check here local (no
         // detectors-crate dep) so config validation stays standalone.
         for entry in &self.network.destination_cidr_allowlist {

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Copyright (C) 2026 Ferith Tools
 //
-// Part of the kernelradar project — Linux kernel anomaly detection via BPF.
+// Part of the kernelradar project - Linux kernel anomaly detection via BPF.
 // See LICENSE for terms.
 
 /// BPF object integrity check.
@@ -11,10 +11,10 @@
 /// on disk and compare.
 ///
 /// Two modes:
-///   • Default — mismatch → loud `error!` log, daemon continues. Lets
+///   • Default - mismatch → loud `error!` log, daemon continues. Lets
 ///     admins see drift immediately without breaking startup on the
 ///     normal "I rebuilt the BPF objects after install" case.
-///   • Strict (`[integrity] strict_mode = true`) — mismatch returns
+///   • Strict (`[integrity] strict_mode = true`) - mismatch returns
 ///     an error, the detector that loaded this object refuses to
 ///     start. Use when running shipped pre-built objects.
 ///
@@ -93,7 +93,7 @@ pub fn verify(detector: &str, bytes: &[u8]) -> Result<(), IntegrityError> {
             detector,
             actual = actual.as_str(),
             expected,
-            "BPF integrity: hash mismatch — file on disk differs \
+            "BPF integrity: hash mismatch - file on disk differs \
              from build-time hash. Possible tampering or version drift."
         );
         if strict {

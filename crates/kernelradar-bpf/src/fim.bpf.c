@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Copyright (C) 2026 Ferith Tools
 //
-// kernelradar — File Integrity Monitor
+// kernelradar - File Integrity Monitor
 //
 // Hooks sys_enter_openat. Filters in BPF: only emit events for
 // openat() with write/append/create flags AND path under sensitive
@@ -32,18 +32,18 @@ struct {
     __uint(max_entries, 256 * 1024);
 } kr_fim_events SEC(".maps");
 
-/* Cheap prefix filter — we only care about /etc/, /root, /home/ */
+/* Cheap prefix filter - we only care about /etc/, /root, /home/ */
 static __always_inline int is_sensitive_prefix(const char *p)
 {
     if (p[0] != '/') return 0;
 
-    /* /etc/ — five chars */
+    /* /etc/ - five chars */
     if (p[1] == 'e' && p[2] == 't' && p[3] == 'c' && p[4] == '/')
         return 1;
-    /* /root — five chars (matches /root, /root/, /root/.ssh/...) */
+    /* /root - five chars (matches /root, /root/, /root/.ssh/...) */
     if (p[1] == 'r' && p[2] == 'o' && p[3] == 'o' && p[4] == 't')
         return 1;
-    /* /home/ — six chars */
+    /* /home/ - six chars */
     if (p[1] == 'h' && p[2] == 'o' && p[3] == 'm'
         && p[4] == 'e' && p[5] == '/')
         return 1;
@@ -74,7 +74,7 @@ int kr_tp_openat(struct trace_event_raw_sys_enter *ctx)
 
     kr_stat_inc(KR_STAT_FIM_OBSERVED);
 
-    /* Sensitive — emit full event */
+    /* Sensitive - emit full event */
     struct kr_event *e = bpf_ringbuf_reserve(&kr_fim_events,
                                               sizeof(*e), 0);
     if (!e) {

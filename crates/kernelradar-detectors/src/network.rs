@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Copyright (C) 2026 Ferith Tools
 //
-// Part of the kernelradar project — Linux kernel anomaly detection via BPF.
+// Part of the kernelradar project - Linux kernel anomaly detection via BPF.
 // See LICENSE for terms.
 
 /// Network anomaly detector.
@@ -67,7 +67,7 @@ impl NetworkDetector {
         let ip = Ipv4Addr::from(ip_host);
 
         // Destination CIDR allowlist short-circuits before process
-        // attribution — saves the /proc/<pid>/exe read for whitelisted
+        // attribution - saves the /proc/<pid>/exe read for whitelisted
         // destinations on busy hosts (Telegram heartbeats, etc.).
         if self.cidrs.contains(ip_host) {
             return;

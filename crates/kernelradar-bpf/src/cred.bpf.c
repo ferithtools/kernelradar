@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Copyright (C) 2026 Ferith Tools
 //
-// kernelradar — Credential theft detector
+// kernelradar - Credential theft detector
 //
 // Watches sys_enter_openat for READ access to a narrow set of
 // credential files: /etc/shadow, /etc/gshadow, /root/.ssh/...,
 // /home/*/.ssh/id_* (private keys).
 //
 // Read-mode filter is the inverse of FIM. Both detectors can attach
-// to the same tracepoint without conflict — BPF allows multiple
+// to the same tracepoint without conflict - BPF allows multiple
 // subscribers per tracepoint.
 
 #include "vmlinux.h"
@@ -32,13 +32,13 @@ struct {
     __uint(max_entries, 256 * 1024);
 } kr_cred_events SEC(".maps");
 
-/* Cheap prefix filter — only fire for paths starting with /etc/sh,
+/* Cheap prefix filter - only fire for paths starting with /etc/sh,
  * /etc/gs, /etc/su, /root, /home/. Userspace does fine matching. */
 static __always_inline int is_cred_candidate(const char *p)
 {
     if (p[0] != '/') return 0;
 
-    /* /etc/shadow, /etc/gshadow, /etc/sudoers — start with /etc/s or /etc/g */
+    /* /etc/shadow, /etc/gshadow, /etc/sudoers - start with /etc/s or /etc/g */
     if (p[1] == 'e' && p[2] == 't' && p[3] == 'c' && p[4] == '/' &&
         (p[5] == 's' || p[5] == 'g'))
         return 1;

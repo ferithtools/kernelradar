@@ -17,16 +17,16 @@ In short:
 If something on the issue tracker, in pull-request reviews, in chat,
 or in any other project space crosses the line, **report it**:
 
-- **GitHub abuse report** — fastest, since GitHub can act on accounts:
+- **GitHub abuse report** - fastest, since GitHub can act on accounts:
   [docs.github.com/en/communities/maintaining-your-safety-on-github/reporting-abuse-or-spam](https://docs.github.com/en/communities/maintaining-your-safety-on-github/reporting-abuse-or-spam).
-- **Email the maintainer** — `ferithtools@users.noreply.github.com`.
+- **Email the maintainer** - `ferithtools@users.noreply.github.com`.
 
 Reports are read by the maintainer only and acted on within 7 days.
 
 Possible responses, ordered by escalation:
 
-1. Quiet word — a private message asking the participant to stop.
-2. Public correction in the thread — "this is out of line, please
+1. Quiet word - a private message asking the participant to stop.
+2. Public correction in the thread - "this is out of line, please
    stop".
 3. Temporary block from the repository.
 4. Permanent ban from the project.

@@ -1,6 +1,6 @@
 # kernelradar
 
-> Behavioral anomaly detection for the Linux kernel via eBPF —
+> Behavioral anomaly detection for the Linux kernel via eBPF -
 > a single Rust binary, no Kubernetes, no SaaS, no telemetry leaving the host.
 
 [![License: GPL-2.0-only](https://img.shields.io/badge/License-GPL%20v2-blue.svg)](LICENSE)
@@ -13,8 +13,8 @@
 > 🤝 **A note to enthusiasts.** kernelradar is being built in the open
 > by one person and a small circle of contributors. If you run
 > small-fleet infrastructure, do Linux security for a living, write
-> Rust or BPF C — or simply believe that Linux observability shouldn't
-> require a SaaS subscription — your help is welcome. File a bug, send
+> Rust or BPF C - or simply believe that Linux observability shouldn't
+> require a SaaS subscription - your help is welcome. File a bug, send
 > a `pull request`, write documentation, port a detector, package the
 > tool for your distro, or just star the repository so others can find
 > it. The roadmap below is a direction, not a fence: if you have a
@@ -23,7 +23,7 @@
 
 ---
 
-## What is this — and why does it exist?
+## What is this - and why does it exist?
 
 `kernelradar` watches a Linux box from inside the kernel via eBPF and flags
 suspicious behaviour in real time: privilege escalation, BPF-based rootkit
@@ -38,7 +38,7 @@ It lives in the same category as the open-source tools **Falco**, **Tetragon**,
 What makes it different:
 
 - **Adaptive baseline + sigma-based anomaly scoring.** It learns what
-  "normal" looks like on each individual host (an EWMA model — per
+  "normal" looks like on each individual host (an EWMA model - per
   detector, per process, per hour of the day) and flags statistical
   deviations, not just static rule matches.
 - **One binary, ~80 MB resident memory.**
@@ -47,7 +47,7 @@ What makes it different:
   management. No threat-intelligence integration. No automated
   remediation in the default install. Pair it with the observability
   stack you already run (journald, Prometheus, Loki, Vector, Wazuh,
-  Slack, Telegram, any Falco-compatible SIEM) — recipes are in
+  Slack, Telegram, any Falco-compatible SIEM) - recipes are in
   [`docs/integrations/`](docs/integrations/).
 
 **Built for the DevOps engineer or sysadmin running 5–50 servers** whose
@@ -58,7 +58,7 @@ connections from an unfamiliar process.
 
 > ⚠️ **Status: v0.1.0-preview.** All eight detectors are implemented and tested
 > on a real host (Debian 12, kernel 6.13). Performance and reliability numbers
-> below are measured, not promised. But this is a young project — please pilot
+> below are measured, not promised. But this is a young project - please pilot
 > on a non-critical box first and read the [security model](#security-model)
 > before wiring it into anything that pages on call.
 
@@ -110,7 +110,7 @@ Full methodology and a per-stage breakdown live in
 
 ## Quickstart
 
-### Option A — install the prebuilt release (Linux x86_64)
+### Option A - install the prebuilt release (Linux x86_64)
 
 ```bash
 # 1. Pull the release tarball.
@@ -120,7 +120,7 @@ curl -fsSLO https://github.com/ferithtools/kernelradar/releases/download/v0.1.0/
 #    can't slip you a tampered binary).
 EXPECTED=$(curl -fsSL https://raw.githubusercontent.com/ferithtools/kernelradar/v0.1.0/release-checksums/v0.1.0/kernelradar-0.1.0-linux-x86_64.tar.gz.sha256 | awk '{print $1}')
 ACTUAL=$(sha256sum kernelradar-0.1.0-linux-x86_64.tar.gz | awk '{print $1}')
-[ "$EXPECTED" = "$ACTUAL" ] || { echo "TAMPERED — do not install"; exit 1; }
+[ "$EXPECTED" = "$ACTUAL" ] || { echo "TAMPERED - do not install"; exit 1; }
 
 # 3. Extract + run the bundled installer.
 tar -xzf kernelradar-0.1.0-linux-x86_64.tar.gz
@@ -134,7 +134,7 @@ journalctl -u kernelradar -f -o cat
 > 🔒 The release is signed only by SHA-256 pinned in the source tree.
 > GPG release signing lands in v0.2.
 
-### Option B — build from source
+### Option B - build from source
 
 Install dependencies (Debian/Ubuntu):
 
@@ -169,7 +169,7 @@ sudo ./target/release/kernelradar daemon \
     --format=plain
 ```
 
-Watch live alerts (in a second terminal — pick whichever you prefer):
+Watch live alerts (in a second terminal - pick whichever you prefer):
 
 ```bash
 # When running with --format=plain (above), alerts go to the daemon's stdout.
@@ -185,7 +185,7 @@ sudo systemctl enable --now kernelradar
 journalctl -u kernelradar -f
 ```
 
-The default install ships in **observe-only** mode — no LSM enforcement, no
+The default install ships in **observe-only** mode - no LSM enforcement, no
 process killing, no outbound webhook. Read [`docs/hardening.md`](docs/hardening.md)
 before flipping any of those on.
 
@@ -218,18 +218,18 @@ formats.
 `kernelradar` does not run its own dashboard; it speaks the protocols you
 already speak. Pick the channel(s) that fit your stack:
 
-- **journald** (default) — structured fields (`DETECTOR=`, `SEVERITY=`,
+- **journald** (default) - structured fields (`DETECTOR=`, `SEVERITY=`,
   `PID=`, `CORRELATION_ID=`, …) for `journalctl -o json | jq`
-- **Prometheus** — `/metrics` endpoint on `127.0.0.1:9101` (off by default;
+- **Prometheus** - `/metrics` endpoint on `127.0.0.1:9101` (off by default;
   `9101` not `9100` to avoid collision with `node_exporter`)
-- **HTTP webhook** — POSTs the alert JSON to any URL you configure;
+- **HTTP webhook** - POSTs the alert JSON to any URL you configure;
   ready-made adapter recipes for Slack and Telegram bots (small Python
   scripts that bridge the webhook to the respective bot API) live in
   [`docs/integrations/slack-telegram.md`](docs/integrations/slack-telegram.md),
   and the same pattern extends to any custom receiver
-- **Falco-compatible JSON** — drop-in for SIEM/aggregators that already
+- **Falco-compatible JSON** - drop-in for SIEM/aggregators that already
   ingest Falco
-- **Plain text / JSON-lines on stdout** — for ad-hoc piping
+- **Plain text / JSON-lines on stdout** - for ad-hoc piping
 
 Working configs live in [`docs/integrations/`](docs/integrations/) for:
 [Wazuh](docs/integrations/wazuh.md),
@@ -283,9 +283,9 @@ Setting expectations honestly:
   `kmod` loads from non-allowlisted processes, block kill of the
   kernelradar process itself) is opt-in and off by default. Default =
   observe + alert. Note: the `kmod` hook is a process allowlist, not a
-  signature check — kernel module signing remains the kernel's job.
+  signature check - kernel module signing remains the kernel's job.
 - **No managed cloud version.** Self-hosted only.
-- **Linux only.** macOS / Windows are out of scope by design — eBPF is a
+- **Linux only.** macOS / Windows are out of scope by design - eBPF is a
   Linux feature.
 - **The network detector is IPv4-only.** Its kernel-side BPF probe filters
   out anything that isn't `AF_INET`, so IPv6 connections are not observed
@@ -303,51 +303,51 @@ of the larger CNCF tools. If they're acceptable trade-offs, read on.
 ## Roadmap 2026
 
 This is a single-maintainer project at a conservative cadence. One
-quarter — one or two minor versions.
+quarter - one or two minor versions.
 
-### Q2 2026 — v0.1.x patch series
+### Q2 2026 - v0.1.x patch series
 
 Closing the v0.1 punch list and shipping installable packages.
 
 - `--dry-run` / `--audit-only` mode for LSM enforcement (logs "would-block"
-  decisions without enforcing them — lets operators canary the policy)
+  decisions without enforcing them - lets operators canary the policy)
 - BPF-side `kr_stats` counters surfaced through the Prometheus exporter
   (currently observable only via `bpftool map dump`)
 - IPv6 destination CIDR allowlist for the network detector
 - Per-detector documentation (one page each: what it catches, what it
   misses, how to tune it)
 - `docs/integrations/email.md` (msmtp / exim recipe)
-- Debian / Ubuntu `.deb` package — first installable release artifact
+- Debian / Ubuntu `.deb` package - first installable release artifact
 
-### Q3 2026 — v0.2
+### Q3 2026 - v0.2
 
 New detectors, persistence/execution coverage, platform expansion.
 
-- **DNS anomaly detector** — DGA / suspicious resolver patterns
-- **Reverse-shell heuristics detector** — process-tree shape + symbolic
+- **DNS anomaly detector** - DGA / suspicious resolver patterns
+- **Reverse-shell heuristics detector** - process-tree shape + symbolic
   port matching (independent of the existing port-blocklist in the
   network detector)
-- **Persistence detector** — additions to `~/.bashrc`, `~/.profile`,
+- **Persistence detector** - additions to `~/.bashrc`, `~/.profile`,
   cron / at jobs, systemd unit files, init.d scripts, and SUID-bit
   flips. Covers MITRE TA0003.
-- **Exec-anomaly detector** — `execve` from `/tmp`, `/dev/shm`,
+- **Exec-anomaly detector** - `execve` from `/tmp`, `/dev/shm`,
   `/var/tmp`; suspicious parent-child mismatches (web server → shell);
   LOLBin-style patterns (curl piping into shell). Covers MITRE TA0002.
 - Pluggable threat-intel adapter for the network detector (one default
-  feed shipped — likely a public CIDR blocklist)
+  feed shipped - likely a public CIDR blocklist)
 - ARM64 cross-compile + qemu-based CI matrix
 - OCI distroless container image
 - RPM package for Fedora / RHEL
 - Reproducible builds + SBOM generation
 - GPG-signed releases
 
-### Q4 2026 — v0.3
+### Q4 2026 - v0.3
 
 Detection breadth and (lightly) UX.
 
-- **Memory anomaly detector** — heap-spray patterns, suspicious slab
+- **Memory anomaly detector** - heap-spray patterns, suspicious slab
   allocations via perf counters
-- **Ransomware-behavior detector** — mass-rename heuristic: N+ files
+- **Ransomware-behavior detector** - mass-rename heuristic: N+ files
   renamed within T seconds by one process, especially with a uniform
   new extension (the typical encryption signature). Covers MITRE TA0040.
 - Embedded read-only HTTP UI (single binary, no separate frontend stack):
@@ -357,7 +357,7 @@ Detection breadth and (lightly) UX.
 - Production-hardening pass: 24-hour KASAN soak in CI, anti-tamper
   improvements
 
-### Q1 2027 — v1.0 (LTS)
+### Q1 2027 - v1.0 (LTS)
 
 Feature-stable cut after community feedback. 12-month support window with
 backported security fixes.
@@ -380,13 +380,13 @@ What `kernelradar` actually does to your system, in one paragraph:
 It loads 12 BPF programs into the kernel via the standard `bpf()` syscall
 under `CAP_BPF` + `CAP_PERFMON` (no need for full root on kernels ≥5.8).
 Eight of those are read-only tracepoint observers. Three are LSM hooks for
-optional enforcement and self-protection — **off by default**. One is a
-shared statistics map. When the daemon exits — including on `SIGKILL`,
-panic, or `OOM` — every BPF program detaches automatically (Aya's `Drop`
+optional enforcement and self-protection - **off by default**. One is a
+shared statistics map. When the daemon exits - including on `SIGKILL`,
+panic, or `OOM` - every BPF program detaches automatically (Aya's `Drop`
 impl). There are no kernel modules, no `/proc/sys` modifications, no
 `sysctl` tweaks, no persistent on-disk state outside `/var/lib/kernelradar/`.
 Network egress is opt-in (webhook / Prometheus only when explicitly
-enabled). Default behaviour is "watch and report" — `kernelradar` does
+enabled). Default behaviour is "watch and report" - `kernelradar` does
 not kill processes or block syscalls unless you explicitly enable the
 LSM enforcement mode.
 
@@ -401,7 +401,7 @@ attacker with root can and cannot do to this tool, see
 
 ## License
 
-GPL-2.0-only — see [`LICENSE`](LICENSE) for the verbatim text.
+GPL-2.0-only - see [`LICENSE`](LICENSE) for the verbatim text.
 
 The BPF programs require GPL because they call kernel BPF helpers that are
 GPL-only; the userspace Rust code is GPL-2.0-only by symmetry. Practical

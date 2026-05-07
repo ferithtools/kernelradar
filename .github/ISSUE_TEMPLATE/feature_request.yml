@@ -12,7 +12,7 @@ body:
            [Discussions](https://github.com/ferithtools/kernelradar/discussions),
            not the issue tracker.
         2. Check the [roadmap](../../README.md#roadmap-2026) and the
-           [backlog](../../k-radar_backlog.md) — your idea might already
+           [backlog](../../k-radar_backlog.md) - your idea might already
            be queued.
 
   - type: textarea
@@ -20,7 +20,7 @@ body:
     attributes:
       label: What's the problem you hit?
       description: |
-        Describe the real-world situation — the attack you're worried
+        Describe the real-world situation - the attack you're worried
         about, the integration you couldn't wire up, the false positive
         you can't tune out. Concrete is better than abstract.
       placeholder: |
@@ -47,9 +47,9 @@ body:
     attributes:
       label: Alternatives considered
       description: |
-        Anything you tried before reaching for kernelradar changes —
+        Anything you tried before reaching for kernelradar changes -
         config tweaks, external filtering in Loki/Vector, custom BPF
-        — and why it wasn't enough.
+        - and why it wasn't enough.
 
   - type: textarea
     id: scope

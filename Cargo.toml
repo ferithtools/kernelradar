@@ -41,7 +41,7 @@ uuid = { version = "1", features = ["v7", "serde"] }
 anyhow  = "1"
 thiserror = "1"
 
-# Regex — allowlist matching.
+# Regex - allowlist matching.
 regex = "1"
 
 # HTTP client for webhook output.

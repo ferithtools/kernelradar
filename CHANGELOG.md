@@ -12,32 +12,32 @@ counters in the Prometheus exporter, IPv6 destination CIDR
 allowlist, per-detector documentation, the email-integration
 recipe, and the first `.deb` package.
 
-## [v0.1.0] — 2026-05-07
+## [v0.1.0] - 2026-05-07
 
 First public preview. The full feature surface is implemented and
 production-tested on a Debian 12 / kernel 6.13.9 host; the GitHub
 release tarball is pinned by SHA-256 in
 [`release-checksums/v0.1.0/`](release-checksums/v0.1.0/).
 
-### Added — eight in-tree detectors
+### Added - eight in-tree detectors
 
-- **privesc** — `setuid(0)` / `setgid(0)` from non-root processes.
-- **bpf-loader** — `BPF_PROG_LOAD` from non-allowlisted processes.
-- **container** — `unshare()` / `setns()` namespace-escape patterns.
-- **kmod** — `init_module` / `finit_module` (kernel-module rootkits).
-- **fim** — write-mode `openat()` against sensitive paths
+- **privesc** - `setuid(0)` / `setgid(0)` from non-root processes.
+- **bpf-loader** - `BPF_PROG_LOAD` from non-allowlisted processes.
+- **container** - `unshare()` / `setns()` namespace-escape patterns.
+- **kmod** - `init_module` / `finit_module` (kernel-module rootkits).
+- **fim** - write-mode `openat()` against sensitive paths
   (`/etc/passwd`, `/etc/shadow`, `~/.ssh/`, `/etc/cron.*/`,
   `/etc/systemd/`, `/etc/init.d/`, `/etc/pam.d/`).
-- **network** — outbound `connect()` to public IPv4, with severity
+- **network** - outbound `connect()` to public IPv4, with severity
   bumping for known reverse-shell ports and a destination CIDR
   allowlist that suppresses connections to whitelisted ranges before
   process attribution.
-- **injection** — `ptrace(PTRACE_ATTACH/SEIZE/POKE*)` and
+- **injection** - `ptrace(PTRACE_ATTACH/SEIZE/POKE*)` and
   `process_vm_writev()`.
-- **cred** — read-mode `openat()` against credential files (shadow,
+- **cred** - read-mode `openat()` against credential files (shadow,
   sudoers, ssh private keys, browser cookies).
 
-### Added — observability and integrations
+### Added - observability and integrations
 
 - Structured journald output with custom fields (`DETECTOR=`,
   `SEVERITY=`, `PID=`, `UID=`, `COMM=`, `CORRELATION_ID=`).
@@ -51,7 +51,7 @@ release tarball is pinned by SHA-256 in
   Prometheus, Loki / Vector / Fluent Bit, Slack and Telegram, and
   Falco-compatible aggregators.
 
-### Added — engine
+### Added - engine
 
 - Adaptive baseline with per-(detector, comm, hour-of-day) EWMA
   buckets and σ-based anomaly scoring.
@@ -63,10 +63,10 @@ release tarball is pinned by SHA-256 in
 - LSM enforcement modes (off by default): `selfprotect` (block kill
   of the daemon's own PID), `enforce_bpf` (block `BPF_PROG_LOAD`
   from non-allowlisted comms), `enforce_kmod` (block `kmod` loads
-  from non-allowlisted comms — a process allowlist, not a signature
+  from non-allowlisted comms - a process allowlist, not a signature
   check). All three integrity-checked at load.
 
-### Added — operability
+### Added - operability
 
 - TOML configuration with hot-reload via `SIGHUP`.
 - `kernelradar config-cmd validate|show|example` for config
@@ -85,7 +85,7 @@ release tarball is pinned by SHA-256 in
   can verify the GitHub-served archive against a value committed
   at release time.
 
-### Security — pre-publication audit
+### Security - pre-publication audit
 
 A full code-review pass before publication surfaced and fixed:
 
@@ -155,7 +155,7 @@ Methodology and per-stage breakdown live in
   most of the TOCTOU window but not all of it for processes that
   `execve` to a binary sharing the first 15 comm bytes
   (`TASK_COMM_LEN`). Treated as a known accuracy bound, not a
-  scheduled fix — kernel-side path capture would close this.
+  scheduled fix - kernel-side path capture would close this.
 
 ### Compatibility
 

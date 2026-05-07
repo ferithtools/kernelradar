@@ -1,4 +1,4 @@
-# kernelradar — Logging guide
+# kernelradar - Logging guide
 
 kernelradar emits two kinds of records:
 
@@ -57,7 +57,7 @@ $ journalctl -t kernelradar -o json | jq 'select(.DETECTOR == "privesc")' | head
   "UID": "1000",
   "COMM": "python3",
   "CORRELATION_ID": "01900000-...",
-  "MESSAGE": "setuid(0) — uid 1000 → 0 by python3",
+  "MESSAGE": "setuid(0) - uid 1000 → 0 by python3",
   ...
 }
 ```
@@ -101,7 +101,7 @@ kernelradar status
 `tracing-subscriber` `EnvFilter`.
 
 ```bash
-# Default — only diagnostic INFO from kernelradar crates
+# Default - only diagnostic INFO from kernelradar crates
 RUST_LOG=kernelradar=info kernelradar daemon
 
 # Increase privesc verbosity, silence kmod
@@ -191,7 +191,7 @@ journalctl -t kernelradar | grep 01900000-12ab-...
 #   privesc cid=01900000-aaaa
 #   bpf-loader cid=01900000-bbbb
 #   network cid=01900000-cccc
-# all within seconds — chain them via timestamps + correlation_id sort.
+# all within seconds - chain them via timestamps + correlation_id sort.
 ```
 
 A future feature will tag related alerts with the same `attack_id`

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Copyright (C) 2026 Ferith Tools
 //
-// Part of the kernelradar project — Linux kernel anomaly detection via BPF.
+// Part of the kernelradar project - Linux kernel anomaly detection via BPF.
 // See LICENSE for terms.
 
 /// Startup preflight checks.
@@ -67,7 +67,7 @@ pub fn check_capabilities() -> bool {
 
     if !caps.cap_sys_resource {
         tracing::info!(
-            "preflight: missing CAP_SYS_RESOURCE — \
+            "preflight: missing CAP_SYS_RESOURCE - \
              large BPF maps may hit RLIMIT_MEMLOCK on older kernels."
         );
     }
@@ -100,7 +100,7 @@ pub fn check_bpf_dir(path: &str) {
             tracing::warn!(
                 path,
                 mode = format!("{:o}", mode),
-                "preflight: BPF dir is world-writable — \
+                "preflight: BPF dir is world-writable - \
                  anyone can swap loaded BPF programs"
             );
         }
@@ -108,7 +108,7 @@ pub fn check_bpf_dir(path: &str) {
             tracing::warn!(
                 path,
                 mode = format!("{:o}", mode),
-                "preflight: BPF dir is group-writable — \
+                "preflight: BPF dir is group-writable - \
                  chmod 0755 or stricter recommended"
             );
         }

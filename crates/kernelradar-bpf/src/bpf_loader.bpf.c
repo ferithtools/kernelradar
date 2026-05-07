@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Copyright (C) 2026 Ferith Tools
 //
-// kernelradar — BPF Program Loader Auditor
+// kernelradar - BPF Program Loader Auditor
 //
 // Hook: sys_enter_bpf
 //   args[0] = cmd
@@ -57,7 +57,7 @@ int kr_tp_bpf_load(struct trace_event_raw_sys_enter *ctx)
     e->event_type   = KR_BPF_PROG_LOAD;
     bpf_get_current_comm(&e->comm, sizeof(e->comm));
 
-    /* data[0]: prog_type — read from userspace bpf_attr.prog_type
+    /* data[0]: prog_type - read from userspace bpf_attr.prog_type
      * bpf_attr layout: prog_type is the first field (__u32 at offset 0) */
     __u32 prog_type = 0;
     void *uattr = (void *)ctx->args[1];

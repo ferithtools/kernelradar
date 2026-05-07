@@ -75,5 +75,5 @@ for line in sys.stdin:
 
 ## Native webhook (no adapter)
 
-If you have a custom receiver — kernelradar will send the alert as-is.
+If you have a custom receiver - kernelradar will send the alert as-is.
 The full Alert schema is documented in `docs/logging.md`.

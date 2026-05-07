@@ -1,4 +1,4 @@
-# kernelradar — Hardening guide
+# kernelradar - Hardening guide
 
 This document covers production hardening and the LSM enforcement
 mode. Default settings keep the daemon strictly observe-only;
@@ -31,7 +31,7 @@ group-writable. For maximum protection, bind-mount it read-only:
 ```
 
 Or on systems using only `tmpfs` for state, ship the BPF objects in
-the kernelradar binary itself — the integrity check below makes this
+the kernelradar binary itself - the integrity check below makes this
 safe even when the on-disk copy is mutable.
 
 ## BPF integrity verification
@@ -45,7 +45,7 @@ Drift can come from:
 - A package upgrade that updated some objects but not others
 - A real attack (file replaced by a malicious BPF program)
 
-The integrity check does not block load — kernelradar logs a loud
+The integrity check does not block load - kernelradar logs a loud
 ERROR and continues. This is intentional: a hardware fault or partial
 upgrade shouldn't take down the security daemon. Investigate any
 mismatch immediately.
@@ -89,8 +89,8 @@ to observe-only operation.
 returns `-EPERM` for `task_kill` aimed at kernelradar's own TGID.
 Exceptions:
 
-- Signals from PID 1 (systemd) — for clean shutdown
-- Signals from kernelradar itself — for internal handling
+- Signals from PID 1 (systemd) - for clean shutdown
+- Signals from kernelradar itself - for internal handling
 
 Disabling self-protection requires either:
 1. PID 1 sends a signal (`systemctl stop kernelradar`)
@@ -113,7 +113,7 @@ kmod_enforce_enabled = true
 kmod_allowlist       = ["modprobe", "kmod", "insmod", "systemd-udevd"]
 ```
 
-### bpf_enforce — block BPF_PROG_LOAD
+### bpf_enforce - block BPF_PROG_LOAD
 
 LSM hook on `bpf` denies `BPF_PROG_LOAD` for any process whose `comm`
 isn't in the allowlist. Effective against:
@@ -124,10 +124,10 @@ isn't in the allowlist. Effective against:
 
 False-positive risks: tools that load BPF dynamically (Cilium DaemonSet,
 custom monitoring agents). Always test in observe-only mode first
-(`detectors.bpf-loader` already alerts on unauthorized loads — reach
+(`detectors.bpf-loader` already alerts on unauthorized loads - reach
 zero noise there before flipping enforcement on).
 
-### kmod_enforce — block kernel module loads
+### kmod_enforce - block kernel module loads
 
 LSM hook on `kernel_read_file` denies `READING_MODULE` for any process
 whose `comm` isn't allowlisted. Effective against:
@@ -147,7 +147,7 @@ When enabling enforcement on a real server:
    and `kernelradar.kmod` alerts in journald. Add every legitimate
    process you see to the allowlist.
 2. **Validate the config:** `kernelradar config-cmd validate`.
-3. **Have console access ready** (IPMI, KVM, physical) — if enforcement
+3. **Have console access ready** (IPMI, KVM, physical) - if enforcement
    misfires, you may not be able to SSH in if sshd somehow gets blocked.
 4. **Enable one hook at a time**, restart, watch.
 5. **Monitor `journalctl -t kernelradar -f`** for enforcement errors.

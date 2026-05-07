@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Copyright (C) 2026 Ferith Tools
 //
-// kernelradar — Kernel Module Rootkit Detector
+// kernelradar - Kernel Module Rootkit Detector
 //
 // Watches two syscalls used to load kernel modules:
 //
-//   sys_enter_finit_module — load module from file descriptor (modprobe)
-//   sys_enter_init_module  — load module from memory buffer (rare, suspicious)
+//   sys_enter_finit_module - load module from file descriptor (modprobe)
+//   sys_enter_init_module  - load module from memory buffer (rare, suspicious)
 //
 // Any module load from an unexpected process is worth auditing.
 // Tracepoints: read-only, no blocking.
@@ -20,7 +20,7 @@
 char LICENSE[] SEC("license") = "GPL";
 
 #define KR_KMOD_FINIT  1   /* finit_module: load from fd */
-#define KR_KMOD_INIT   2   /* init_module:  load from memory — very suspicious */
+#define KR_KMOD_INIT   2   /* init_module:  load from memory - very suspicious */
 
 struct {
     __uint(type,        BPF_MAP_TYPE_RINGBUF);
@@ -61,7 +61,7 @@ static __always_inline void emit_kmod(struct trace_event_raw_sys_enter *ctx,
     bpf_ringbuf_submit(e, 0);
 }
 
-/* finit_module(fd, params, flags) — normal module load */
+/* finit_module(fd, params, flags) - normal module load */
 SEC("tracepoint/syscalls/sys_enter_finit_module")
 int kr_tp_finit_module(struct trace_event_raw_sys_enter *ctx)
 {
@@ -70,7 +70,7 @@ int kr_tp_finit_module(struct trace_event_raw_sys_enter *ctx)
     return 0;
 }
 
-/* init_module(buf, len, params) — load from memory, classic rootkit path */
+/* init_module(buf, len, params) - load from memory, classic rootkit path */
 SEC("tracepoint/syscalls/sys_enter_init_module")
 int kr_tp_init_module(struct trace_event_raw_sys_enter *ctx)
 {

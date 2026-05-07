@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Copyright (C) 2026 Ferith Tools
 //
-// Part of the kernelradar project — Linux kernel anomaly detection via BPF.
+// Part of the kernelradar project - Linux kernel anomaly detection via BPF.
 // See LICENSE for terms.
 
 use anyhow::Result;
@@ -48,7 +48,7 @@ impl KmodDetector {
 
         let (title, ctx) = if ev.event_type == 2 {
             (
-                format!("init_module() LOAD FROM MEMORY by {comm} — rootkit technique"),
+                format!("init_module() LOAD FROM MEMORY by {comm} - rootkit technique"),
                 serde_json::json!({"syscall":"init_module","exe":exe}),
             )
         } else {
