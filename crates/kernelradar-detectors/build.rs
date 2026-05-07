@@ -8,9 +8,10 @@
 /// The result is written to $OUT_DIR/bpf_hashes.rs as a static map
 /// that the runtime loader uses to verify integrity.
 ///
-/// If a .bpf.o file is absent at build time we record an empty hash
-/// - the loader will then accept any bytes, with a warning. This
-/// avoids breaking `cargo check` when BPF objects haven't been built.
+/// If a .bpf.o file is absent at build time we record an empty hash;
+/// the loader then accepts any bytes for that detector with a runtime
+/// warning. This keeps `cargo check` working when BPF objects haven't
+/// been built.
 use std::env;
 use std::fs;
 use std::path::PathBuf;
