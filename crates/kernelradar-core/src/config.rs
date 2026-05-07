@@ -107,6 +107,12 @@ pub struct WebhookTomlConfig {
     pub auth_token: Option<String>,
     /// Forward only Severity ≥ Alert when true. Useful for Slack/Telegram.
     pub severity_filter_alert_or_higher: bool,
+    /// SSRF guard. Default `false`: refuse webhook URLs pointing at
+    /// loopback (127.0.0.0/8, ::1), link-local / cloud metadata
+    /// (169.254.0.0/16, fe80::/10), or RFC1918 private ranges. Operators
+    /// who legitimately want to POST to a private collector on the
+    /// management network can flip this to `true`.
+    pub allow_private_destinations: bool,
 }
 
 impl Default for WebhookTomlConfig {
@@ -117,6 +123,7 @@ impl Default for WebhookTomlConfig {
             timeout_secs: 3,
             auth_token: None,
             severity_filter_alert_or_higher: false,
+            allow_private_destinations: false,
         }
     }
 }
@@ -287,8 +294,18 @@ impl Config {
             )),
         }
 
-        if self.webhook.enabled && self.webhook.url.is_empty() {
-            issues.push("webhook.enabled = true but webhook.url is empty".into());
+        if self.webhook.enabled {
+            if self.webhook.url.is_empty() {
+                issues.push("webhook.enabled = true but webhook.url is empty".into());
+            } else if !self.webhook.allow_private_destinations {
+                if let Some(reason) = webhook_url_security_issue(&self.webhook.url) {
+                    issues.push(format!(
+                        "webhook.url {:?}: {reason}. \
+                         Set webhook.allow_private_destinations = true to override.",
+                        self.webhook.url
+                    ));
+                }
+            }
         }
         if self.prometheus.enabled && self.prometheus.listen_addr.is_empty() {
             issues.push("prometheus.enabled = true but listen_addr is empty".into());
@@ -365,4 +382,157 @@ fn is_valid_ipv4_cidr(s: &str) -> bool {
         return false;
     }
     matches!(len.trim().parse::<u32>(), Ok(n) if n <= 32)
+}
+
+/// SSRF guard for webhook URLs. Returns `Some(reason)` when the URL
+/// targets a destination that should not be allowed without an
+/// explicit `allow_private_destinations = true` opt-in:
+///
+/// - cloud-metadata IPs (169.254.0.0/16, fd00:ec2::/32)
+/// - loopback (127.0.0.0/8, ::1)
+/// - RFC1918 private (10/8, 172.16/12, 192.168/16)
+/// - link-local IPv6 (fe80::/10) and ULA (fc00::/7)
+/// - hostnames `localhost`, `metadata.google.internal`,
+///   `metadata`, `metadata.azure.com`, etc.
+/// - schemes other than http/https
+///
+/// Pure syntactic check on the URL string; cannot resolve DNS at
+/// config-validate time, so a hostname pointing at 127.0.0.1 will
+/// pass validation and fail at runtime if the daemon is reachable.
+/// Operators who care should pin the destination by IP.
+pub fn webhook_url_security_issue(url: &str) -> Option<String> {
+    use std::net::{Ipv4Addr, Ipv6Addr};
+
+    let lower = url.to_ascii_lowercase();
+    let scheme_end = lower.find("://")?;
+    let scheme = &lower[..scheme_end];
+    if scheme != "http" && scheme != "https" {
+        return Some(format!("scheme {scheme:?} not allowed (only http / https)"));
+    }
+    if scheme == "http" {
+        return Some("plain http (no TLS); use https".into());
+    }
+
+    let after_scheme = &lower[scheme_end + 3..];
+    let host_part = after_scheme
+        .split(['/', '?', '#'])
+        .next()
+        .unwrap_or(after_scheme);
+    // Strip user-info and port.
+    let host = host_part.rsplit('@').next().unwrap_or(host_part);
+    let host = if let Some(stripped) = host.strip_prefix('[') {
+        // IPv6 in brackets.
+        stripped.split(']').next().unwrap_or(stripped)
+    } else {
+        host.split(':').next().unwrap_or(host)
+    };
+
+    const BLOCKED_HOSTNAMES: &[&str] = &[
+        "localhost",
+        "ip6-localhost",
+        "metadata",
+        "metadata.google.internal",
+        "metadata.azure.com",
+        "169.254.169.254",
+    ];
+    for blocked in BLOCKED_HOSTNAMES {
+        if host == *blocked {
+            return Some(format!("hostname {blocked:?} is blocked"));
+        }
+    }
+
+    if let Ok(v4) = host.parse::<Ipv4Addr>() {
+        let o = v4.octets();
+        if v4.is_loopback() {
+            return Some("loopback IPv4 (127.0.0.0/8)".into());
+        }
+        if v4.is_private() {
+            return Some("RFC1918 private IPv4".into());
+        }
+        if v4.is_link_local() {
+            return Some("link-local IPv4 (169.254.0.0/16, includes cloud metadata)".into());
+        }
+        if o[0] == 0 || v4.is_broadcast() || v4.is_multicast() || v4.is_unspecified() {
+            return Some("non-routable IPv4".into());
+        }
+    } else if let Ok(v6) = host.parse::<Ipv6Addr>() {
+        if v6.is_loopback() {
+            return Some("loopback IPv6 (::1)".into());
+        }
+        if v6.is_unspecified() || v6.is_multicast() {
+            return Some("non-routable IPv6".into());
+        }
+        let seg0 = v6.segments()[0];
+        if seg0 & 0xffc0 == 0xfe80 {
+            return Some("link-local IPv6 (fe80::/10)".into());
+        }
+        if seg0 & 0xfe00 == 0xfc00 {
+            return Some("unique-local IPv6 (fc00::/7)".into());
+        }
+    }
+    None
+}
+
+#[cfg(test)]
+mod webhook_url_tests {
+    use super::webhook_url_security_issue as check;
+
+    #[test]
+    fn blocks_loopback_ipv4() {
+        assert!(check("https://127.0.0.1/hook").is_some());
+        assert!(check("https://127.1.2.3/hook").is_some());
+    }
+
+    #[test]
+    fn blocks_cloud_metadata() {
+        assert!(check("https://169.254.169.254/").is_some());
+        assert!(check("https://metadata.google.internal/").is_some());
+    }
+
+    #[test]
+    fn blocks_rfc1918() {
+        assert!(check("https://10.0.0.1/").is_some());
+        assert!(check("https://192.168.1.1/").is_some());
+        assert!(check("https://172.16.5.5/").is_some());
+    }
+
+    #[test]
+    fn blocks_localhost_name() {
+        assert!(check("https://localhost/h").is_some());
+        assert!(check("https://localhost:9090/h").is_some());
+    }
+
+    #[test]
+    fn blocks_plain_http() {
+        assert!(check("http://example.com/").is_some());
+    }
+
+    #[test]
+    fn blocks_loopback_ipv6() {
+        assert!(check("https://[::1]/h").is_some());
+    }
+
+    #[test]
+    fn blocks_link_local_ipv6() {
+        assert!(check("https://[fe80::1]/h").is_some());
+    }
+
+    #[test]
+    fn allows_public_https() {
+        assert!(check("https://hooks.slack.com/services/X/Y/Z").is_none());
+        assert!(check("https://api.telegram.org/botX/sendMessage").is_none());
+        assert!(check("https://203.0.113.5/hook").is_none());
+    }
+
+    #[test]
+    fn rejects_unknown_scheme() {
+        assert!(check("ftp://example.com/").is_some());
+        assert!(check("file:///etc/passwd").is_some());
+    }
+
+    #[test]
+    fn handles_userinfo_and_port() {
+        assert!(check("https://user:pass@127.0.0.1:8080/h").is_some());
+        assert!(check("https://user@hooks.slack.com/x").is_none());
+    }
 }
