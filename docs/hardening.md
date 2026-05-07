@@ -22,8 +22,19 @@ strip them down based on which detectors you enable.
 ## BPF object directory
 
 `/var/lib/kernelradar/bpf` is the runtime location of all `.bpf.o`
-files. The daemon warns if the directory is world-writable or
-group-writable. For maximum protection, bind-mount it read-only:
+files. The daemon warns if the directory is world-writable,
+group-writable, or **not owned by uid 0**. The last point matters:
+the directory's owner can replace `.bpf.o` files between daemon
+restarts, and only the integrity check then stands between them
+and arbitrary BPF code in the kernel. Always:
+
+```bash
+sudo chown -R root:root /var/lib/kernelradar/bpf
+sudo chmod 0755 /var/lib/kernelradar/bpf
+sudo chmod 0644 /var/lib/kernelradar/bpf/*.bpf.o
+```
+
+For maximum protection, bind-mount the directory read-only:
 
 ```bash
 # /etc/fstab
@@ -38,16 +49,27 @@ safe even when the on-disk copy is mutable.
 
 At build time, `build.rs` computes SHA-256 of every `.bpf.o` file and
 embeds the digest in the binary. At load time the daemon re-hashes
-the file on disk and logs a *security* warning on mismatch.
+the file on disk before passing it to the verifier.
+
+Two modes:
+
+- **Strict** (default, `[integrity] strict_mode = true`): a hash
+  mismatch OR a missing build-time hash refuses to load that
+  detector. This is the only safe setting for binaries an operator
+  did not just build themselves - including any binary downloaded
+  from a release artefact.
+- **Permissive** (`strict_mode = false`): mismatch logs a loud
+  `error!` and the daemon continues. Useful while iterating on
+  `.bpf.o` files after install. Flip strict back on before shipping.
 
 Drift can come from:
 - An admin replacing a `.bpf.o` file out-of-band
 - A package upgrade that updated some objects but not others
 - A real attack (file replaced by a malicious BPF program)
 
-The integrity check does not block load - kernelradar logs a loud
-ERROR and continues. This is intentional: a hardware fault or partial
-upgrade shouldn't take down the security daemon. Investigate any
+In permissive mode kernelradar logs a loud ERROR and continues so
+that a hardware fault or partial upgrade does not take down the
+security daemon. Investigate any
 mismatch immediately.
 
 ## Prerequisite for self-protect and enforcement: enable BPF in the active LSM stack
@@ -151,6 +173,26 @@ When enabling enforcement on a real server:
    misfires, you may not be able to SSH in if sshd somehow gets blocked.
 4. **Enable one hook at a time**, restart, watch.
 5. **Monitor `journalctl -t kernelradar -f`** for enforcement errors.
+
+## Running `config-cmd validate` safely
+
+`kernelradar config-cmd validate <path>` reads any path the invoking
+user can read and runs the TOML parser. On a parse error the parser
+prints a chunk of the file content into stderr to point at the
+syntax issue. **Do not** run this command via `sudo` against a path
+the invoking user cannot read on their own (e.g. `/etc/shadow`,
+`/root/.ssh/id_*`) - the parser snippet display can echo bytes
+from those files into the terminal.
+
+The default install does not ship `kernelradar` setuid; running it
+as your own user only leaks what your user can already read. If you
+need to validate a config that lives under a privileged path, copy
+it to a location your user owns first:
+
+```bash
+sudo cat /etc/kernelradar/config.toml > /tmp/check.toml
+kernelradar config-cmd validate --path /tmp/check.toml
+```
 
 ## Recovery
 
