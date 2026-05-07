@@ -1,0 +1,98 @@
+name: 🐛 Bug report
+description: kernelradar isn't behaving as documented.
+title: "[bug]: "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time. Please fill in everything you can —
+        kernelradar runs in a privileged spot in the system, so without
+        repro details we usually can't reach a useful conclusion.
+
+        For **security** vulnerabilities use the private channel in
+        [SECURITY.md](../../SECURITY.md), not this form.
+
+  - type: input
+    id: version
+    attributes:
+      label: kernelradar version
+      description: Output of `kernelradar --version` (it carries the git SHA).
+      placeholder: "kernelradar 0.1.0 (abc123def456, built 2026-05-07)"
+    validations:
+      required: true
+
+  - type: input
+    id: kernel
+    attributes:
+      label: Kernel version
+      description: Output of `uname -r`.
+      placeholder: "6.13.9-zabbly+"
+    validations:
+      required: true
+
+  - type: input
+    id: distro
+    attributes:
+      label: Distribution
+      placeholder: "Debian 12, Fedora 40, Arch, …"
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: |
+        What did you do? What did you see? What did you expect?
+      placeholder: |
+        I ran `sudo kernelradar daemon --format=plain` and triggered
+        `setuid(0)` from a non-root process. I expected an ALERT line,
+        but the daemon stayed silent for 30 seconds.
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Minimal reproduction
+      description: |
+        Smallest sequence of commands that reproduces the bug. Skip if
+        none — but expect a slower triage.
+      render: bash
+      placeholder: |
+        # In one terminal:
+        sudo ./target/release/kernelradar detect privesc \
+            --bpf-dir crates/kernelradar-bpf/.output
+
+        # In another:
+        sudo -u nobody python3 -c 'import os; os.setuid(0)'
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant journal / log output
+      description: |
+        `journalctl -u kernelradar --since '5 minutes ago' -o cat`
+        (or the last 30 lines of stdout when running with
+        `--format=plain`). Wrap in a code block.
+      render: text
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: |
+        Config snippets, distinguishing aspects of your environment
+        (containers / namespaces / custom kernel), partial workarounds,
+        related issues, etc.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Self-checks
+      options:
+        - label: I searched existing issues and didn't find a duplicate.
+          required: true
+        - label: I confirmed this isn't a security issue (would be reported privately).
+          required: true

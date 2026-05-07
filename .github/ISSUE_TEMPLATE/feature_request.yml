@@ -1,0 +1,73 @@
+name: 💡 Feature request
+description: A concrete proposal for a new detector, integration, or behaviour.
+title: "[feat]: "
+labels: ["feature", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Two preliminaries before you fill this in:
+
+        1. Vague ideas / open-ended discussions belong in
+           [Discussions](https://github.com/ferithtools/kernelradar/discussions),
+           not the issue tracker.
+        2. Check the [roadmap](../../README.md#roadmap-2026) and the
+           [backlog](../../k-radar_backlog.md) — your idea might already
+           be queued.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What's the problem you hit?
+      description: |
+        Describe the real-world situation — the attack you're worried
+        about, the integration you couldn't wire up, the false positive
+        you can't tune out. Concrete is better than abstract.
+      placeholder: |
+        On a host running 200 short-lived containers per hour, the
+        `container` detector floods journald with `setns(NEWNS)` events
+        from runc, which is legitimate. I want a way to suppress those
+        without suppressing everything from runc.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: |
+        What change would solve it? A new detector? A config knob? A
+        BPF filter? A docs clarification? Be specific enough to
+        argue with.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: |
+        Anything you tried before reaching for kernelradar changes —
+        config tweaks, external filtering in Loki/Vector, custom BPF
+        — and why it wasn't enough.
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: Out-of-scope clarifier (optional)
+      description: |
+        If your proposal could grow, specify what's NOT in scope so
+        reviewers don't read more into it than you mean.
+
+  - type: checkboxes
+    id: alignment
+    attributes:
+      label: Alignment with project scope
+      description: |
+        kernelradar is a per-host BPF-based observer for small fleets.
+        It deliberately does NOT include a web dashboard, multi-host
+        fleet management, threat-intel feeds, or automated remediation
+        beyond opt-in LSM blocking. Confirm your proposal fits.
+      options:
+        - label: My proposal fits the per-host BPF observer scope (or proposes a clean reason to extend it).
+          required: true

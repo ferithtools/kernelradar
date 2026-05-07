@@ -1,0 +1,14 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 🔒 Security vulnerability
+    url: https://github.com/ferithtools/kernelradar/security/advisories/new
+    about: |
+      Do NOT open a public issue for security findings. Use a private
+      GitHub Security Advisory. See SECURITY.md for the full reporting
+      flow.
+  - name: 💬 General question / discussion
+    url: https://github.com/ferithtools/kernelradar/discussions
+    about: |
+      Questions, ideas, or use-case discussions belong in Discussions,
+      not the issue tracker. The issue tracker is for actionable bugs
+      and feature requests with a concrete proposal.
