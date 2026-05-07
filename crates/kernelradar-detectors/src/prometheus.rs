@@ -13,12 +13,25 @@
 /// All other paths → 404.
 ///
 /// Renders all counters from `metrics::*` plus daemon health gauges.
+use std::sync::Arc;
 use std::sync::OnceLock;
+use std::time::Duration;
 
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
+use tokio::sync::Semaphore;
 
 use crate::metrics::{cumulative_anomalies, cumulative_bursts, cumulative_totals};
+
+/// Per-request read deadline. Slowloris-style clients that open a
+/// connection and never send `\r\n\r\n` get cut off and the task
+/// returns to the pool.
+const REQUEST_READ_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// Cap on simultaneously-served Prometheus requests. The exporter
+/// is a low-traffic management-plane endpoint; legitimate load is
+/// "one scrape every 15-60 seconds". Anything beyond this is hostile.
+const MAX_INFLIGHT_REQUESTS: usize = 16;
 
 #[derive(Debug, Clone)]
 pub struct PromConfig {
@@ -62,6 +75,8 @@ pub fn spawn_server() {
         };
         tracing::info!(addr = %addr, "prometheus: serving /metrics");
 
+        let inflight = Arc::new(Semaphore::new(MAX_INFLIGHT_REQUESTS));
+
         loop {
             let (mut stream, peer) = match listener.accept().await {
                 Ok(p) => p,
@@ -71,12 +86,33 @@ pub fn spawn_server() {
                 }
             };
 
+            // Drop the connection immediately if we are at the
+            // inflight cap - prevents a client opening N+1 sockets and
+            // tying up tokio worker threads.
+            let permit = match Arc::clone(&inflight).try_acquire_owned() {
+                Ok(p) => p,
+                Err(_) => {
+                    tracing::warn!(
+                        peer = %peer,
+                        "prometheus: dropping connection (over inflight cap)"
+                    );
+                    drop(stream);
+                    continue;
+                }
+            };
+
             tokio::spawn(async move {
+                // Bound the read so a client that never sends \r\n\r\n
+                // does not pin the task forever.
                 let mut buf = [0u8; 1024];
-                let n = match stream.read(&mut buf).await {
-                    Ok(n) if n > 0 => n,
-                    _ => return,
-                };
+                let n =
+                    match tokio::time::timeout(REQUEST_READ_TIMEOUT, stream.read(&mut buf)).await {
+                        Ok(Ok(n)) if n > 0 => n,
+                        _ => {
+                            drop(permit);
+                            return;
+                        }
+                    };
                 let req = String::from_utf8_lossy(&buf[..n]);
                 let path = req.split_whitespace().nth(1).unwrap_or("");
 
@@ -87,8 +123,10 @@ pub fn spawn_server() {
                     "/healthz" => http_response(200, "text/plain", "ok\n"),
                     _ => http_response(404, "text/plain", "not found\n"),
                 };
-                let _ = stream.write_all(resp.as_bytes()).await;
-                let _ = peer; // suppress unused
+                let _ =
+                    tokio::time::timeout(REQUEST_READ_TIMEOUT, stream.write_all(resp.as_bytes()))
+                        .await;
+                drop(permit);
             });
         }
     });
