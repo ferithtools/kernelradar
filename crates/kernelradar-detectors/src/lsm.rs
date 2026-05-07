@@ -166,7 +166,7 @@ fn load_selfprotect(path: &str, btf: &Btf) -> Result<Ebpf> {
         .take_map("kr_protected_tgid")
         .context("kr_protected_tgid map missing")?;
     let mut arr: Array<MapData, u32> = Array::try_from(map)?;
-    arr.set(0, &tgid, 0)?;
+    arr.set(0, tgid, 0)?;
 
     Ok(bpf)
 }

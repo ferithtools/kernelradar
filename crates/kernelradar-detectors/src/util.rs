@@ -167,7 +167,6 @@ pub fn print_alert(alert: &Alert, _legacy_json: bool) {
                 emit_anomaly_marker(alert, score);
                 record_anomaly(&alert.detector);
             }
-            return;
         }
         Decision::Allow => {
             record_alert(&alert.detector, alert.severity);

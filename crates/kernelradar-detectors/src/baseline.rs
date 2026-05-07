@@ -165,7 +165,7 @@ impl Baseline {
             let cutoff = now - chrono::Duration::hours(self.config.evict_age_hours);
             let before = self.pairs.len();
             self.pairs
-                .retain(|_, p| p.last_seen.map_or(false, |t| t > cutoff));
+                .retain(|_, p| p.last_seen.is_some_and(|t| t > cutoff));
             // Drop matching cur_minute entries too — otherwise that map
             // would be the new unbounded leak.
             let live: std::collections::HashSet<_> = self.pairs.keys().cloned().collect();
@@ -236,7 +236,7 @@ impl Baseline {
         }
         let tmp = path.with_extension("json.tmp");
         let text = serde_json::to_string_pretty(self)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+            .map_err(std::io::Error::other)?;
         std::fs::write(&tmp, text)?;
         std::fs::rename(&tmp, &path)?;
 

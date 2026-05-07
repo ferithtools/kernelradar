@@ -22,6 +22,7 @@ use kernelradar_core::event::KrEvent;
 enum MatchKind {
     Exact,
     Prefix,
+    #[allow(dead_code)]
     Contains,
 }
 
