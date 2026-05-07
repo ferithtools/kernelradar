@@ -35,6 +35,23 @@ pub fn detect_systemd_environment() -> bool {
     std::env::var_os("JOURNAL_STREAM").is_some() || std::env::var_os("INVOCATION_ID").is_some()
 }
 
+/// Cached `/etc/hostname`. Read once at first access; the value can
+/// be tampered with on disk (FIM watches `/etc/`, so writes are
+/// alerted on), but we don't want the Falco output path doing a
+/// syscall per emitted alert just to keep up with that. Downstream
+/// rules must not rely on this field for trust decisions.
+fn host_name() -> &'static str {
+    static HOST: OnceLock<String> = OnceLock::new();
+    HOST.get_or_init(|| {
+        std::fs::read_to_string("/etc/hostname")
+            .ok()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| "unknown".into())
+    })
+    .as_str()
+}
+
 /// Translate a kernelradar Alert into a Falco-compatible JSON object.
 ///
 /// Falco fields used:
@@ -54,10 +71,7 @@ pub fn alert_to_falco_json(alert: &kernelradar_core::alert::Alert) -> String {
         kernelradar_core::event::Severity::Info => "Informational",
     };
 
-    let hostname = std::fs::read_to_string("/etc/hostname")
-        .ok()
-        .map(|s| s.trim().to_string())
-        .unwrap_or_else(|| "unknown".into());
+    let hostname = host_name();
 
     // Build output_fields with Falco-conventional names + our custom ones
     let mut fields = serde_json::Map::new();

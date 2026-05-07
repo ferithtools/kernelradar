@@ -35,7 +35,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 tracing-journald   = "0.3"
 
 # UUID v7 for correlation IDs (timestamp-prefixed)
-uuid = { version = "1", features = ["v7", "serde"] }
+uuid = { version = "1", features = ["v4", "serde"] }
 
 # Errors
 anyhow  = "1"

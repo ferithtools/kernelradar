@@ -126,7 +126,11 @@ pub fn make_alert(
 
     Alert {
         id: ALERT_ID.fetch_add(1, Ordering::Relaxed),
-        correlation_id: Uuid::now_v7(),
+        // Random v4 (not v7) so the correlation_id does not embed a
+        // millisecond unix timestamp - that would leak host start time
+        // and alert cadence to anyone reading the journald stream or
+        // the Prometheus exporter.
+        correlation_id: Uuid::new_v4(),
         timestamp: Utc::now(),
         severity: sev,
         detector: std::borrow::Cow::Borrowed(detector),
