@@ -112,6 +112,32 @@ Full methodology and a per-stage breakdown live in
 
 ## Quickstart
 
+### Option A — install the prebuilt release (Linux x86_64)
+
+```bash
+# 1. Pull the release tarball.
+curl -fsSLO https://github.com/ferithtools/kernelradar/releases/download/v0.1.0/kernelradar-0.1.0-linux-x86_64.tar.gz
+
+# 2. Verify against the in-repo SHA-256 pin (so a compromised CDN
+#    can't slip you a tampered binary).
+EXPECTED=$(curl -fsSL https://raw.githubusercontent.com/ferithtools/kernelradar/v0.1.0/release-checksums/v0.1.0/kernelradar-0.1.0-linux-x86_64.tar.gz.sha256 | awk '{print $1}')
+ACTUAL=$(sha256sum kernelradar-0.1.0-linux-x86_64.tar.gz | awk '{print $1}')
+[ "$EXPECTED" = "$ACTUAL" ] || { echo "TAMPERED — do not install"; exit 1; }
+
+# 3. Extract + run the bundled installer.
+tar -xzf kernelradar-0.1.0-linux-x86_64.tar.gz
+cd kernelradar-0.1.0-linux-x86_64
+sha256sum -c SHA256SUMS                  # verify each shipped file
+./install.sh                              # binary, BPF objects, systemd unit, default config
+sudo systemctl enable --now kernelradar
+journalctl -u kernelradar -f -o cat
+```
+
+> 🔒 The release is signed only by SHA-256 pinned in the source tree.
+> GPG release signing lands in v0.2 (T-15.6).
+
+### Option B — build from source
+
 Install dependencies (Debian/Ubuntu):
 
 ```bash
@@ -508,6 +534,32 @@ Linux 6.13.9 · Debian 12.
 ---
 
 ## Быстрый старт
+
+### Вариант A — поставить готовый релиз (Linux x86_64)
+
+```bash
+# 1. Скачать архив релиза.
+curl -fsSLO https://github.com/ferithtools/kernelradar/releases/download/v0.1.0/kernelradar-0.1.0-linux-x86_64.tar.gz
+
+# 2. Проверить против SHA-256, запиннованного в исходниках
+#    (защита от подмены: даже если CDN скомпрометирован, не пройдёт).
+EXPECTED=$(curl -fsSL https://raw.githubusercontent.com/ferithtools/kernelradar/v0.1.0/release-checksums/v0.1.0/kernelradar-0.1.0-linux-x86_64.tar.gz.sha256 | awk '{print $1}')
+ACTUAL=$(sha256sum kernelradar-0.1.0-linux-x86_64.tar.gz | awk '{print $1}')
+[ "$EXPECTED" = "$ACTUAL" ] || { echo "TAMPERED — не ставить"; exit 1; }
+
+# 3. Распаковать и запустить установщик из комплекта.
+tar -xzf kernelradar-0.1.0-linux-x86_64.tar.gz
+cd kernelradar-0.1.0-linux-x86_64
+sha256sum -c SHA256SUMS                  # проверить каждый файл архива
+./install.sh                              # бинарь, BPF, systemd unit, конфиг по умолчанию
+sudo systemctl enable --now kernelradar
+journalctl -u kernelradar -f -o cat
+```
+
+> 🔒 Релиз подписан только SHA-256, который зафиксирован в дереве
+> исходников. GPG-подпись релизов появится в v0.2 (T-15.6).
+
+### Вариант B — собрать из исходников
 
 Установить зависимости (Debian/Ubuntu):
 

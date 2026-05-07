@@ -1,8 +1,9 @@
 # Rust
 /target/
-Cargo.lock
 **/*.rs.bk
 *.pdb
+# Cargo.lock — committed (binary crate; pin reproducible builds + needed
+# by `rustsec/audit-check` in CI).
 
 # BPF build artifacts
 crates/kernelradar-bpf/.output/
@@ -28,3 +29,4 @@ config.local.toml
 # Release artifacts — checksums are tracked under release-checksums/,
 # the binary tarball itself is not in git (lives on GitHub Releases).
 /dist/
+ADMIN_README.md  # internal admin doc; never push
