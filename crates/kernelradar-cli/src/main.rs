@@ -570,6 +570,12 @@ score_threshold    = 3.0     # 3-sigma threshold
 alpha              = 0.10    # EWMA smoothing factor (smaller = more inertia)
 save_path          = "/var/lib/kernelradar/baseline.json"
 save_interval_secs = 300     # save every 5 minutes
+pairs_max          = 10000   # cap on tracked (detector, comm) pairs
+evict_age_hours    = 168     # 7 days; pairs older than this evicted at cap
+# Minimum samples per hour-of-day bucket before its (mean, sigma)
+# is used for scoring. Defends against drift attacks that slowly
+# train the bucket during warm-up.
+min_samples_for_scoring = 24
 
 [webhook]
 # HTTP POST every alert to a URL (Slack, Telegram-bot, custom SIEM).

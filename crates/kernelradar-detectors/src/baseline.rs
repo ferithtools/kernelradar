@@ -50,6 +50,13 @@ pub struct BaselineConfig {
     /// cap (in which case nothing is evicted on that pass).
     #[serde(default = "default_evict_age_hours")]
     pub evict_age_hours: i64,
+    /// Minimum samples a per-hour bucket must accumulate before its
+    /// (mean, sigma) is treated as authoritative. Until then the
+    /// "no prior data" branch scores against (mean=0, sigma=floor)
+    /// so that an attacker who slowly trained the bucket during the
+    /// warm-up window cannot declare their own ramp "normal".
+    #[serde(default = "default_min_samples_for_scoring")]
+    pub min_samples_for_scoring: u64,
 }
 
 fn default_pairs_max() -> usize {
@@ -57,6 +64,9 @@ fn default_pairs_max() -> usize {
 }
 fn default_evict_age_hours() -> i64 {
     24 * 7
+}
+fn default_min_samples_for_scoring() -> u64 {
+    24
 }
 
 impl Default for BaselineConfig {
@@ -69,6 +79,7 @@ impl Default for BaselineConfig {
             save_interval_secs: 300, // every 5 minutes
             pairs_max: 10_000,
             evict_age_hours: 24 * 7, // 7 days
+            min_samples_for_scoring: 24,
         }
     }
 }
@@ -208,9 +219,17 @@ impl Baseline {
         }
 
         let bucket = &stats.buckets[hour];
-        if bucket.samples == 0 {
-            // No prior data for this hour. Score as "new pattern":
-            // use observed as raw signal compared to mean=0, σ=floor.
+        // Refuse to score against a bucket with too few observations.
+        // Otherwise an attacker can race the warm-up window: appear
+        // for the first time while `learning_secs` is still in effect,
+        // get free `observe()` calls without scoring, then look
+        // "normal" the moment scoring kicks in. Requiring a minimum
+        // sample count breaks that ramp - the first events after
+        // warm-up score against a "no prior data" branch instead of
+        // against the attacker's own warm-up trace.
+        if bucket.samples < self.config.min_samples_for_scoring {
+            // No (or too little) prior data for this hour. Score as
+            // "new pattern": observed compared against mean=0, σ=floor.
             let z = observed / 0.5;
             if z >= self.config.score_threshold {
                 return Some(z);

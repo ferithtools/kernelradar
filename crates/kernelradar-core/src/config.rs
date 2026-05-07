@@ -165,6 +165,11 @@ pub struct BaselineTomlConfig {
     pub pairs_max: usize,
     /// Pairs older than this (last_seen-wise) are evicted when at cap.
     pub evict_age_hours: i64,
+    /// Minimum samples a per-hour bucket must collect before its
+    /// learned (mean, sigma) is used for scoring. Until then events
+    /// score against the "no prior data" branch. Defends against
+    /// drift attacks that slowly train the bucket during warm-up.
+    pub min_samples_for_scoring: u64,
 }
 
 impl Default for BaselineTomlConfig {
@@ -178,6 +183,7 @@ impl Default for BaselineTomlConfig {
             save_interval_secs: 300,
             pairs_max: 10_000,
             evict_age_hours: 24 * 7,
+            min_samples_for_scoring: 24,
         }
     }
 }

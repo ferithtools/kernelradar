@@ -70,6 +70,7 @@ pub fn init_runtime_services(cfg: &Config, is_daemon: bool) {
             save_interval_secs: cfg.baseline.save_interval_secs,
             pairs_max: cfg.baseline.pairs_max,
             evict_age_hours: cfg.baseline.evict_age_hours,
+            min_samples_for_scoring: cfg.baseline.min_samples_for_scoring,
         });
     }
 
