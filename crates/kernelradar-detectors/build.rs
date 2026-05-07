@@ -41,15 +41,33 @@ fn main() {
     ];
 
     let mut entries = String::new();
+    let mut missing: Vec<&str> = Vec::new();
     for name in names {
         let path = bpf_dir.join(format!("{name}.bpf.o"));
         let hash = match fs::read(&path) {
             Ok(bytes) => sha256_hex(&bytes),
-            Err(_) => String::new(),
+            Err(_) => {
+                missing.push(name);
+                String::new()
+            }
         };
         entries.push_str(&format!("    (\"{name}\", \"{hash}\"),\n"));
-        // Re-run if the file changes
+        // Re-run if the file changes (including: appears for the first time).
         println!("cargo:rerun-if-changed={}", path.display());
+    }
+
+    // Loud warning if the BPF objects were missing at build time. Without
+    // them the integrity table records empty hashes and the daemon logs
+    // "no build-time hash recorded" at every startup. Users should build
+    // BPF first (root Makefile already does this in the right order).
+    if !missing.is_empty() {
+        println!(
+            "cargo:warning=BPF objects missing at build time: {}. \
+             Run `make` from the repo root (not `cargo build` directly) \
+             so BPF is built first; otherwise integrity verification will \
+             warn at every startup.",
+            missing.join(", ")
+        );
     }
 
     let module = format!(

@@ -34,8 +34,11 @@ StateDirectory=kernelradar
 RuntimeDirectory=kernelradar
 
 # Process hardening
-ProtectKernelTunables=false   # we LOAD BPF, may need /proc/sys/kernel access
-ProtectKernelModules=false    # likewise — bpf is "loading kernel code"
+# ProtectKernelTunables / ProtectKernelModules are FALSE because we
+# load BPF programs (which is "loading kernel code") and may need to
+# touch /proc/sys/kernel/* for runtime tuning.
+ProtectKernelTunables=false
+ProtectKernelModules=false
 ProtectKernelLogs=true
 ProtectControlGroups=true
 ProtectClock=true
@@ -43,7 +46,8 @@ ProtectHostname=true
 RestrictRealtime=true
 RestrictSUIDSGID=true
 LockPersonality=true
-MemoryDenyWriteExecute=false  # BPF JIT generates executable code
+# BPF JIT generates executable code, so we cannot deny W^X.
+MemoryDenyWriteExecute=false
 
 # Network: AF_INET[6] required for the optional Prometheus endpoint
 # (T-5.4) and webhook output (T-5.3). Drop them in pure-journald

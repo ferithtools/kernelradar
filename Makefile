@@ -23,7 +23,11 @@ all: bpf rust
 bpf:
 	$(MAKE) -C $(BPF_DIR)
 
-rust:
+# rust depends on bpf — the userspace `build.rs` hashes the .bpf.o
+# files at compile time for integrity verification. Without this
+# ordering, a first-time `make rust` records empty hashes and the
+# daemon logs "no build-time hash recorded" at every startup.
+rust: bpf
 	$(CARGO) build --release
 
 check:

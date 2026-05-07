@@ -41,10 +41,23 @@ pub struct BaselineConfig {
     /// are dropped. Protects against unbounded HashMap growth from
     /// short-lived containers, fuzzing, or hostile flooding under
     /// many fake comms.
+    ///
+    /// `serde(default)` so a baseline.json written by an older build
+    /// (without these fields) still deserialises — the field gets
+    /// `BaselineConfig::default().pairs_max` instead of failing.
+    #[serde(default = "default_pairs_max")]
     pub pairs_max: usize,
     /// M-3: minimum staleness for eviction; younger pairs are kept
     /// even at cap (in which case nothing is evicted that pass).
+    #[serde(default = "default_evict_age_hours")]
     pub evict_age_hours: i64,
+}
+
+fn default_pairs_max() -> usize {
+    10_000
+}
+fn default_evict_age_hours() -> i64 {
+    24 * 7
 }
 
 impl Default for BaselineConfig {
