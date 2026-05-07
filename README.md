@@ -155,13 +155,14 @@ Build and run:
 git clone https://github.com/ferithtools/kernelradar.git
 cd kernelradar
 
-# 1. Compile the BPF objects
-( cd crates/kernelradar-bpf && make )
+# 1. Build BPF objects + userspace daemon. The top-level Makefile
+#    ensures BPF is built first so build.rs can hash the .bpf.o
+#    files into the integrity-verification table; running
+#    `cargo build` directly logs "no build-time hash recorded" at
+#    every startup.
+make
 
-# 2. Build the userspace daemon
-cargo build --release
-
-# 3. Validate, then run
+# 2. Validate, then run
 sudo ./target/release/kernelradar config-cmd validate
 sudo ./target/release/kernelradar daemon \
     --bpf-dir crates/kernelradar-bpf/.output \

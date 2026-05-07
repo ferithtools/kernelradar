@@ -124,14 +124,25 @@ learn_duration_hours = 48
 
 ## Build requirements
 
-Building BPF programs requires a Linux machine or WSL2 with:
-- `clang` ≥ 14
+Both halves of the build require Linux (or WSL2) — the BPF objects
+need a clang capable of `target=bpf` and the kernel's BTF type info,
+and the userspace `build.rs` hashes the freshly built `.bpf.o` files
+for integrity verification. Build artifacts (`.bpf.o`, `target/`)
+are not committed; the in-repo `release-checksums/` directory is the
+only thing that pins binary state across releases.
+
+Toolchain:
+- `clang` ≥ 14 with the BPF backend
 - `libbpf-dev` ≥ 1.0
-- Kernel headers matching target kernel
-
-Userspace Rust code can be developed cross-platform; BPF programs are committed as pre-compiled `.o` files for convenience.
+- `bpftool` (used to generate `vmlinux.h`)
+- Linux kernel built with `CONFIG_DEBUG_INFO_BTF=y` (mainstream
+  distro kernels already are)
+- Rust toolchain stable
 
 ```
-make -C crates/kernelradar-bpf     # Linux only
-cargo build --release              # Any platform
+make    # builds BPF objects, then the userspace daemon
 ```
+
+The top-level Makefile orders BPF before Rust deliberately so the
+integrity table picks up real hashes — running `cargo build`
+directly logs "no build-time hash recorded" at every startup.
