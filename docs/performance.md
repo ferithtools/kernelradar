@@ -1,9 +1,10 @@
 # kernelradar - Performance
 
-All numbers below were collected on the lowest-spec hardware that
-kernelradar is officially supported on, to give you a worst-case
-floor. On real server hardware (Xeon, Threadripper, Ampere) you can
-expect 5×–20× better.
+All numbers below were collected on the lowest-spec hardware
+kernelradar is officially supported on - the worst-case floor.
+Throughput on bigger hardware will be higher, but the project does
+not yet have measurements on Xeon/Threadripper/Ampere class boxes
+to publish here.
 
 ## Hardware
 

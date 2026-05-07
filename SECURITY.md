@@ -32,9 +32,8 @@ is coordinated: by default we publish the advisory + fix together.
 ## Supported versions
 
 Until v1.0 this project is pre-1.0; only the latest minor line
-receives security fixes. After v1.0 (planned Q1 2027 - see
-[`README.md`](README.md#roadmap-2026)) the LTS branch will be
-maintained for 12 months.
+receives security fixes. The v1.0 LTS branch (when it ships) will
+be maintained for 12 months.
 
 | Version | Supported |
 |---|---|

@@ -1,7 +1,7 @@
 # kernelradar
 
-> Behavioral anomaly detection for the Linux kernel via eBPF -
-> a single Rust binary, no Kubernetes, no SaaS, no telemetry leaving the host.
+> Linux host security daemon: eight eBPF-based detectors, one Rust
+> binary, journald output by default.
 
 [![License: GPL-2.0-only](https://img.shields.io/badge/License-GPL%20v2-blue.svg)](LICENSE)
 [![CI](https://github.com/ferithtools/kernelradar/actions/workflows/ci.yml/badge.svg)](https://github.com/ferithtools/kernelradar/actions/workflows/ci.yml)
@@ -10,57 +10,45 @@
 
 ---
 
-> 🤝 **A note to enthusiasts.** kernelradar is being built in the open
-> by one person and a small circle of contributors. If you run
-> small-fleet infrastructure, do Linux security for a living, write
-> Rust or BPF C - or simply believe that Linux observability shouldn't
-> require a SaaS subscription - your help is welcome. File a bug, send
-> a `pull request`, write documentation, port a detector, package the
-> tool for your distro, or just star the repository so others can find
-> it. The roadmap below is a direction, not a fence: if you have a
-> real-world scenario that needs a different detector, open an `issue`
-> and let's talk.
+> **Status: pre-1.0 preview, single maintainer.** The eight detectors
+> work and are production-tested on one Debian 12 / kernel 6.13.9
+> host. There is no CNCF backing, no fleet of users, no multi-year
+> track record. Pilot on a non-critical box first. Contributions of
+> any size welcome - file an issue, send a PR, package for a distro,
+> or star the repo so others can find it.
 
 ---
 
-## What is this - and why does it exist?
+## What it is
 
-`kernelradar` watches a Linux box from inside the kernel via eBPF and flags
-suspicious behaviour in real time: privilege escalation, BPF-based rootkit
-loads, container escapes, unauthorized kernel-module installs, file-integrity
-violations, outbound connections to public addresses on reverse-shell ports,
-process injection, and credential-file reads.
+`kernelradar` is a single Linux daemon that loads eleven eBPF programs
+(eight observers + three optional LSM enforcement hooks) and emits
+structured alerts to journald, JSON, a webhook, or a Prometheus
+endpoint. Detectors cover `setuid(0)`, `BPF_PROG_LOAD` outside an
+allowlist, `unshare` / `setns`, kernel-module loads, write-mode opens
+of sensitive files (`/etc/shadow`, ssh keys, ...), outbound IPv4
+`connect()` to public addresses, `ptrace` / `process_vm_writev`, and
+read-mode opens of credential files.
 
-It lives in the same category as the open-source tools **Falco**, **Tetragon**,
-**Tracee**, and the commercial endpoint-detection products like **SentinelOne**,
-**CrowdStrike Falcon**, **Sysdig Secure**.
+It is in the same broad space as **Falco**, **Tetragon**, and
+**Tracee**. Those projects are mature, CNCF-class, with thousands of
+rules and active communities; kernelradar is none of those things.
+What it does try to do is be **one small Rust daemon you can drop
+onto an on-prem or edge host without a Kubernetes cluster around it**,
+with a 65-80 MB resident set instead of 200-500 MB. See the
+[Comparison](#comparison) table for the honest read of where it
+fits and where it doesn't.
 
-What makes it different:
+In addition to the static detectors, kernelradar tracks an EWMA of
+events-per-minute per `(detector, comm, hour-of-day)` and emits a
+secondary alert when the rate diverges past a sigma threshold. This
+is a running statistical heuristic, not machine learning - useful as
+a second signal alongside whatever rule engine you already run, not
+as a replacement.
 
-- **Adaptive baseline + sigma-based anomaly scoring.** It learns what
-  "normal" looks like on each individual host (an EWMA model - per
-  detector, per process, per hour of the day) and flags statistical
-  deviations, not just static rule matches.
-- **One binary, ~80 MB resident memory.**
-  Drop it on the server, point it at journald, walk away.
-- **About what's not (yet) here.** No web UI. No centralized
-  management. No threat-intelligence integration. No automated
-  remediation in the default install. Pair it with the observability
-  stack you already run (journald, Prometheus, Loki, Vector, Wazuh,
-  Slack, Telegram, any Falco-compatible SIEM) - recipes are in
-  [`docs/integrations/`](docs/integrations/).
-
-**Built for the DevOps engineer or sysadmin running 5–50 servers** whose
-budget can't stretch to enterprise EDR subscriptions but who still wants
-to know in real time when something on a production box runs `setuid(0)`,
-loads an unsigned kernel module, opens `/etc/shadow`, or makes outbound
-connections from an unfamiliar process.
-
-> ⚠️ **Status: v0.1.0-preview.** All eight detectors are implemented and tested
-> on a real host (Debian 12, kernel 6.13). Performance and reliability numbers
-> below are measured, not promised. But this is a young project - please pilot
-> on a non-critical box first and read the [security model](#security-model)
-> before wiring it into anything that pages on call.
+What's not in v0.1: web UI, fleet manager, threat-intel feed, IPv6
+in the network detector, automatic remediation. The default install
+is observe-only.
 
 ---
 
@@ -146,9 +134,11 @@ Pick something else when:
 
 ## Performance
 
-All numbers were collected on the lowest-spec hardware `kernelradar` is
-officially supported on, to give a worst-case floor. On real server hardware
-(Xeon, Threadripper, Ampere) you can expect 5×–20× better.
+The numbers below were collected on the lowest-spec hardware
+`kernelradar` is officially supported on - the worst-case floor.
+Throughput on bigger hardware will be higher, but the project does
+not yet have measurements on Xeon/Threadripper/Ampere class boxes
+to publish.
 
 **Hardware:** Intel Celeron J4125 @ 2.0 GHz · 4 cores · no SMT · 8 GB DDR4 ·
 Linux kernel 6.13.9 · Debian 12.
@@ -191,8 +181,9 @@ sudo systemctl enable --now kernelradar
 journalctl -u kernelradar -f -o cat
 ```
 
-> 🔒 The release is signed only by SHA-256 pinned in the source tree.
-> GPG release signing lands in v0.2.
+> The release is checksummed (SHA-256 pinned in the source tree),
+> not cryptographically signed. Identity-based signing via cosign /
+> Sigstore is targeted for v0.2.
 
 ### Option B - build from source
 
@@ -360,10 +351,13 @@ of the larger CNCF tools. If they're acceptable trade-offs, read on.
 
 ---
 
-## Roadmap 2026
+## Roadmap
 
-This is a single-maintainer project at a conservative cadence. One
-quarter - one or two minor versions.
+A direction, not a commitment. Single-maintainer projects miss
+quarters; treat the dates below as "no earlier than" rather than
+"by then". The list moves with what real users ask for - if a
+scheduled item has no demand and an unscheduled one does, that
+gets reordered.
 
 ### Q2 2026 - v0.1.x patch series
 
@@ -427,9 +421,9 @@ backported security fixes.
 (rootkit PID-hiding via `/proc` enumeration mismatch), mount-anomaly
 detector (privileged container mounts).
 
-Roadmap moves with reality. The
-[backlog file](k-radar_backlog.md) is the authoritative live tracker;
-this section is a snapshot.
+Day-to-day prioritisation lives on the GitHub
+[issues page](https://github.com/ferithtools/kernelradar/issues) -
+file one if a missing detector is blocking your use case.
 
 ---
 
