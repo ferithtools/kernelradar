@@ -1,0 +1,17 @@
+edaef632cbb643e4e7a221717a6c441a4c1a7c918e6e4d56debc3d8739b233f6  ./LICENSE
+27d0a0172394b003d4c4c6d40554453ed093678fa96260f7840267993f896c1b  ./README.md
+39f23e4f5359c04b6aa73db3205e9e678c02a05e715e738c26b901416d66438c  ./bin/kernelradar
+cff76fe213c99d2a1d01027108ad84a35e51d1935bf7f56a6aa4121c4e49f63f  ./install.sh
+07a0d518991f98377076bac60f953c229d066dad9d15eddb97ee9686ccd28868  ./lib/kernelradar/bpf/bpf_loader.bpf.o
+75e2740caaa955ea8853c6e336506819bb209f54fdb0c65d99a25deb674659fa  ./lib/kernelradar/bpf/container.bpf.o
+7cf4952dbbe5f23f04c10459f71a9edb9d05fe31d5b5bcd4a61f3975d4102068  ./lib/kernelradar/bpf/cred.bpf.o
+07cbb8ae9180e8fb050df36ea2c1652caa0fbd9e91b421284ff4e0d8f5e3b7a9  ./lib/kernelradar/bpf/enforce_bpf.bpf.o
+4e07663d24f9082862718aa87850a030f8f68723cf80908d6ce8c301c83b5f0a  ./lib/kernelradar/bpf/enforce_kmod.bpf.o
+eb76607b72eedccabe9899bbc07cbec52550388774f1d09f584ae9740492c35b  ./lib/kernelradar/bpf/fim.bpf.o
+d7d6e4c63f14c0b78bed74e5188d52f16205f6033801b5ff8b36e859737ad4f8  ./lib/kernelradar/bpf/injection.bpf.o
+9d0330ac90e667a65f7502ffce36f66e52b460ee2394bb83a842903f0c1afd9d  ./lib/kernelradar/bpf/kmod.bpf.o
+edb70b054775f52e4e1e44376f36a5a5443fbe90eebccc8ed22d1f01a638b885  ./lib/kernelradar/bpf/network.bpf.o
+09938ff6c7f2f39db47a752979ff4b8f7b371fdec0aa74742895b4eb68008dee  ./lib/kernelradar/bpf/privesc.bpf.o
+935099ea949c92f219786dffc67298e6d799c97abf1fecf33f1833f1d97f04ff  ./lib/kernelradar/bpf/selfprotect.bpf.o
+2d0d3059c4c1bf244d23374ab79c2ed3a9c942c1b06f765016591e7c58993835  ./share/kernelradar/config.toml.example
+8438c99369dc0f88e44f4f77a813d11954c3bba6dd8c19a5bbd330bed36a23d0  ./share/systemd/kernelradar.service

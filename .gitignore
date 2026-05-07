@@ -24,3 +24,7 @@ tests/output/
 *.pem
 *.key
 config.local.toml
+
+# Release artifacts — checksums are tracked under release-checksums/,
+# the binary tarball itself is not in git (lives on GitHub Releases).
+/dist/
