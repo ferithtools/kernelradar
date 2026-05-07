@@ -4,6 +4,8 @@
 // Part of the kernelradar project — Linux kernel anomaly detection via BPF.
 // See LICENSE for terms.
 
+mod bootstrap;
+
 use anyhow::Result;
 use clap::{Parser, Subcommand, ValueEnum};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
@@ -11,28 +13,19 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilte
 use kernelradar_core::config::Config;
 use kernelradar_detectors::{
     allowlist::SharedAllowlist,
-    baseline::{
-        in_learning, init_with_config as init_baseline, reset_global as baseline_reset,
-        snapshot as baseline_snapshot, spawn_periodic_save, BaselineConfig,
-    },
+    baseline::{in_learning, reset_global as baseline_reset, snapshot as baseline_snapshot},
     bpf_loader::BpfLoaderDetector,
     cidr::{parse_all as parse_cidrs, SharedCidrList},
     container::ContainerDetector,
     cred::CredDetector,
-    dedup::{init as init_rate_limit, RateLimitConfig},
     fim::FimDetector,
     injection::InjectionDetector,
     kmod::KmodDetector,
-    lsm::{install as install_lsm, EnforcementConfig},
-    metrics::{cumulative_anomalies, cumulative_bursts, cumulative_totals, spawn_hourly_summary},
+    metrics::{cumulative_anomalies, cumulative_bursts, cumulative_totals},
     network::NetworkDetector,
     output::{detect_systemd_environment, set_output_format, OutputFormat},
-    preflight::{check_bpf_dir, check_capabilities},
     privesc::PrivEscDetector,
-    prometheus::{init as init_prometheus, spawn_server as spawn_prom_server, PromConfig},
-    webhook::{init as init_webhook, WebhookConfig},
 };
-use std::time::Duration;
 
 const DEFAULT_ALLOW: &str = "runc,containerd,dockerd,podman,crio,\
 modprobe,kmod,insmod,\
@@ -212,96 +205,20 @@ async fn main() -> Result<()> {
         }
     }
 
-    // Switch BPF integrity check to strict-fail mode if configured.
-    // Must happen before any detector calls verify_bpf().
-    kernelradar_detectors::integrity::set_strict_mode(cfg.integrity.strict_mode);
-    if cfg.integrity.strict_mode {
-        tracing::info!("BPF integrity check: strict mode ON — mismatch refuses to load");
+    let is_daemon = matches!(cli.command, Commands::Daemon { .. });
+    bootstrap::init_runtime_services(&cfg, is_daemon);
+
+    // Preflight checks for any command that actually loads BPF.
+    match &cli.command {
+        Commands::Daemon { bpf_dir, .. } | Commands::Detect { bpf_dir, .. } => {
+            bootstrap::run_preflight(bpf_dir);
+        }
+        _ => {}
     }
 
-    // Initialise webhook
-    init_webhook(WebhookConfig {
-        enabled: cfg.webhook.enabled,
-        url: cfg.webhook.url.clone(),
-        timeout_secs: cfg.webhook.timeout_secs,
-        auth_token: cfg.webhook.auth_token.clone(),
-        severity_filter_alert_or_higher: cfg.webhook.severity_filter_alert_or_higher,
-    });
-
-    // Initialise Prometheus
-    init_prometheus(PromConfig {
-        enabled: cfg.prometheus.enabled,
-        listen_addr: cfg.prometheus.listen_addr.clone(),
-    });
-
-    // Initialise rate limiter from config
-    let rl_cfg = &cfg.ratelimit;
-    init_rate_limit(RateLimitConfig {
-        window: Duration::from_secs(rl_cfg.window_secs),
-        window_max: rl_cfg.window_max,
-        burst_threshold: rl_cfg.burst_threshold,
-        burst_window: Duration::from_secs(rl_cfg.burst_window_secs),
-        backoff_initial: Duration::from_secs(rl_cfg.backoff_initial_secs),
-        backoff_max: Duration::from_secs(rl_cfg.backoff_max_secs),
-    });
-
-    // Initialise baseline — load from disk if present
-    if cfg.baseline.enabled {
-        init_baseline(BaselineConfig {
-            learning_secs: cfg.baseline.learning_secs,
-            score_threshold: cfg.baseline.score_threshold,
-            alpha: cfg.baseline.alpha,
-            save_path: cfg.baseline.save_path.clone(),
-            save_interval_secs: cfg.baseline.save_interval_secs,
-            pairs_max: cfg.baseline.pairs_max,
-            evict_age_hours: cfg.baseline.evict_age_hours,
-        });
-    }
-
-    if matches!(cli.command, Commands::Daemon { .. }) {
-        spawn_hourly_summary();
-        if cfg.baseline.enabled {
-            spawn_periodic_save();
-        }
-        if cfg.prometheus.enabled {
-            spawn_prom_server();
-        }
-    }
-
-    // ── Preflight ────────────────────────────────────────────────────
-    if matches!(
-        cli.command,
-        Commands::Daemon { .. } | Commands::Detect { .. }
-    ) {
-        check_capabilities();
-        if let Commands::Daemon { ref bpf_dir, .. } = cli.command {
-            check_bpf_dir(bpf_dir);
-        }
-        if let Commands::Detect { ref bpf_dir, .. } = cli.command {
-            check_bpf_dir(bpf_dir);
-        }
-    }
-
-    // ── LSM enforcement + self-protection ────────────────────────────
-    // Failures here NEVER abort the daemon; LSM stays opt-in and silent.
-    if matches!(cli.command, Commands::Daemon { .. }) {
-        let enf = &cfg.enforcement;
-        if enf.selfprotect_enabled || enf.bpf_enforce_enabled || enf.kmod_enforce_enabled {
-            let bpf_dir = match cli.command {
-                Commands::Daemon { ref bpf_dir, .. } => bpf_dir.clone(),
-                _ => "/var/lib/kernelradar/bpf".into(),
-            };
-            install_lsm(&EnforcementConfig {
-                selfprotect_enabled: enf.selfprotect_enabled,
-                bpf_enforce_enabled: enf.bpf_enforce_enabled,
-                kmod_enforce_enabled: enf.kmod_enforce_enabled,
-                selfprotect_obj_path: format!("{bpf_dir}/selfprotect.bpf.o"),
-                bpf_enforce_obj_path: format!("{bpf_dir}/enforce_bpf.bpf.o"),
-                kmod_enforce_obj_path: format!("{bpf_dir}/enforce_kmod.bpf.o"),
-                bpf_allowlist: enf.bpf_allowlist.clone(),
-                kmod_allowlist: enf.kmod_allowlist.clone(),
-            });
-        }
+    // LSM enforcement is daemon-only.
+    if let Commands::Daemon { bpf_dir, .. } = &cli.command {
+        bootstrap::install_lsm_if_enabled(&cfg, bpf_dir);
     }
 
     match cli.command {
