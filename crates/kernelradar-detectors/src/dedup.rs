@@ -228,13 +228,13 @@ pub fn init(config: RateLimitConfig) {
 
 /// Make a decision for an alert.
 pub fn check(
-    detector: &Cow<'static, str>,
+    detector: Cow<'static, str>,
     comm: &str,
     event_type: u16,
     severity: Severity,
 ) -> Decision {
     let mut rl = lock();
-    rl.check((detector.clone(), comm.to_string(), event_type), severity)
+    rl.check((detector, comm.to_string(), event_type), severity)
 }
 
 /// Drain suppressed counters since last drain.

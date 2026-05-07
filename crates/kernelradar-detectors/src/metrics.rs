@@ -45,34 +45,30 @@ fn counters() -> &'static Mutex<Counters> {
     COUNTERS.get_or_init(|| Mutex::new(Counters::default()))
 }
 
-pub fn record_alert(detector: &Det, severity: Severity) {
+pub fn record_alert(detector: Det, severity: Severity) {
     if let Ok(mut c) = counters().lock() {
         *c.bucket_emitted
             .entry((detector.clone(), severity))
             .or_insert(0) += 1;
-        *c.total_emitted
-            .entry((detector.clone(), severity))
-            .or_insert(0) += 1;
+        *c.total_emitted.entry((detector, severity)).or_insert(0) += 1;
     }
 }
 
-pub fn record_suppressed(detector: &Det, severity: Severity) {
+pub fn record_suppressed(detector: Det, severity: Severity) {
     if let Ok(mut c) = counters().lock() {
-        *c.bucket_suppressed
-            .entry((detector.clone(), severity))
-            .or_insert(0) += 1;
+        *c.bucket_suppressed.entry((detector, severity)).or_insert(0) += 1;
     }
 }
 
-pub fn record_burst(detector: &Det) {
+pub fn record_burst(detector: Det) {
     if let Ok(mut c) = counters().lock() {
-        *c.total_bursts.entry(detector.clone()).or_insert(0) += 1;
+        *c.total_bursts.entry(detector).or_insert(0) += 1;
     }
 }
 
-pub fn record_anomaly(detector: &Det) {
+pub fn record_anomaly(detector: Det) {
     if let Ok(mut c) = counters().lock() {
-        *c.total_anomalies.entry(detector.clone()).or_insert(0) += 1;
+        *c.total_anomalies.entry(detector).or_insert(0) += 1;
     }
 }
 

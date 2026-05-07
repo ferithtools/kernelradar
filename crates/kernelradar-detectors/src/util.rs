@@ -152,9 +152,10 @@ pub fn print_alert(alert: &Alert, _legacy_json: bool) {
     // Suppressed events still feed the model — that IS the model.
     let z = baseline_score(&alert.detector, &alert.comm);
 
-    // Rate limit / burst / backoff
+    // Rate limit / burst / backoff. `alert.detector.clone()` is a
+    // pointer copy in the common Cow::Borrowed case — no allocation.
     let decision = rate_check(
-        &alert.detector,
+        alert.detector.clone(),
         &alert.comm,
         alert.event_type,
         alert.severity,
@@ -162,30 +163,30 @@ pub fn print_alert(alert: &Alert, _legacy_json: bool) {
 
     match decision {
         Decision::Suppress => {
-            record_suppressed(&alert.detector, alert.severity);
+            record_suppressed(alert.detector.clone(), alert.severity);
             // Anomaly side-channel: even rate-limited events that are
             // statistically anomalous deserve a one-off ANOMALY alert.
             if let Some(score) = z {
                 emit_anomaly_marker(alert, score);
-                record_anomaly(&alert.detector);
+                record_anomaly(alert.detector.clone());
             }
         }
         Decision::Allow => {
-            record_alert(&alert.detector, alert.severity);
+            record_alert(alert.detector.clone(), alert.severity);
             emit(alert);
             if let Some(score) = z {
                 emit_anomaly_marker(alert, score);
-                record_anomaly(&alert.detector);
+                record_anomaly(alert.detector.clone());
             }
         }
         Decision::Burst => {
-            record_alert(&alert.detector, alert.severity);
-            record_burst(&alert.detector);
+            record_alert(alert.detector.clone(), alert.severity);
+            record_burst(alert.detector.clone());
             emit(alert);
             emit_burst_marker(alert);
             if let Some(score) = z {
                 emit_anomaly_marker(alert, score);
-                record_anomaly(&alert.detector);
+                record_anomaly(alert.detector.clone());
             }
         }
     }
