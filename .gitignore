@@ -34,3 +34,7 @@ ADMIN_README.md  # internal admin doc; never push
 # Internal trackers — never commit
 k-radar_backlog.md
 *.local.md
+
+# Branding assets — kept locally, distributed via GitHub social-preview /
+# release-asset settings, not via the source tree.
+/rc/
