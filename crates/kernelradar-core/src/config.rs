@@ -357,8 +357,5 @@ fn is_valid_ipv4_cidr(s: &str) -> bool {
     if addr.trim().parse::<std::net::Ipv4Addr>().is_err() {
         return false;
     }
-    match len.trim().parse::<u32>() {
-        Ok(n) if n <= 32 => true,
-        _ => false,
-    }
+    matches!(len.trim().parse::<u32>(), Ok(n) if n <= 32)
 }
