@@ -69,14 +69,12 @@ connections from an unfamiliar process.
 | | kernelradar | Falco | Tetragon | Tracee | Commercial EDR |
 |---|---|---|---|---|---|
 | License | **GPL-2.0-only** (copyleft) | Apache-2.0 | Apache-2.0 | Apache-2.0 | proprietary |
-| Detection model | Rules + **adaptive baseline (sigma)** | Rules | Policies | Signatures | ML + cloud rules |
-| On-host learning (no cloud) | **✅** | ❌ | ❌ | ❌ | ❌ (cloud-only) |
-| In-tree SHA-256 release pin | **✅** | ❌ | ❌ | ❌ | n/a |
-| LSM enforcement on bare metal (no k8s) | **✅ opt-in** | ❌ | partial (k8s-typical) | ❌ | ✅ |
+| Idle RSS (footprint) | **65-80 MB** | ~200 MB | ~500 MB | ~300 MB | varies |
 | Single self-contained binary | ✅ | ✅ | partial (k8s-first) | ✅ | n/a |
 | Kubernetes required | ❌ | ❌ | typically yes | ❌ | n/a |
+| Detection model | Rules + EWMA/sigma | Rules | Policies | Signatures | ML + cloud rules |
+| LSM enforcement (block mode) | opt-in | ❌ | ✅ | ❌ | ✅ |
 | SaaS / data leaves host | ❌ | ❌ | ❌ | ❌ | ✅ |
-| Idle RSS (footprint) | **65-80 MB** | ~200 MB | ~500 MB | ~300 MB | varies |
 | Per-host monthly cost | free | free | free | free | typically tens of dollars |
 | Web UI / dashboard | ❌ | ❌ (third-party) | partial (Hubble) | ❌ | ✅ |
 | Pre-built rule library | small | **large** | medium | medium | large |
@@ -85,60 +83,64 @@ connections from an unfamiliar process.
 
 Numbers for the free peers are approximations from each project's published
 documentation; `kernelradar`'s figures are measured directly on the lowest-spec
-hardware we officially support (see [Performance](#performance)).
+hardware officially supported (see [Performance](#performance)).
 
-The four rows in **bold** are where kernelradar is genuinely
-differentiated, not merely smaller:
+The honest read of this table: Falco / Tetragon / Tracee are mature,
+production-trusted tools with active CNCF-class communities. **They
+do more, they do it better-tested, they cover more scenarios out of
+the box.** If you run Kubernetes at scale, run Falco. If you need
+policy enforcement woven into a service mesh, run Tetragon.
 
-- **GPL-2.0-only.** Apache-2.0 lets a fork be closed and re-sold as
+The two rows in **bold** are where kernelradar is structurally
+different, not just smaller:
+
+- **GPL-2.0-only.** Apache-2.0 forks can be closed and re-sold as
   proprietary; GPL-2.0 obligates derivatives to publish source. For
-  security tooling that's a structural argument against a future
-  "kernelradar Enterprise" subscription tier appearing.
-- **Adaptive baseline.** The other free peers are rule engines -
-  they alert on what an admin pre-described. kernelradar adds a
-  per-(detector, comm, hour-of-day) EWMA + sigma score that flags
-  rate deviations the rules don't cover. Commercial EDRs do this
-  too - typically by sending events to a cloud model.
-- **In-tree SHA-256 release pin.** Tarball checksums for v0.1.0
-  live in `release-checksums/v0.1.0/` inside the source tree. A
-  consumer can clone the repo, fetch the GitHub release tarball,
-  and verify it offline against a value committed at release
-  time - tampering through a compromised CDN is detected without
-  trust-on-first-use.
-- **LSM enforcement on bare metal.** `selfprotect` (block kill of
-  the daemon's TGID), `enforce_bpf` (block `BPF_PROG_LOAD` from
-  non-allowlisted comms), and `enforce_kmod` (block module loads)
-  all run as BPF LSM hooks on a single host without an
-  orchestrator. Tetragon offers comparable enforcement but is
-  k8s-shaped; Falco doesn't enforce at all.
+  security tooling that is the structural argument against a future
+  "kernelradar Enterprise" subscription tier appearing - the source
+  has to come along no matter who picks it up.
+- **65-80 MB resident set.** This is not "fewer features so smaller
+  RAM"; it is "one Rust daemon, no Lua-policy interpreter, no k8s
+  integration overhead, no plugin host". Falco's Lua engine and
+  Tetragon's Cilium-shaped runtime are powerful and mostly the
+  reason their resident set is what it is. On Celeron-class edge
+  boxes, 4 GB SOHO routers, or per-VPS deployments where 500 MB
+  resident is unacceptable, the difference is the whole reason to
+  pick kernelradar.
 
-## What kernelradar trades away
+The other rows in the table are facts but not selling points:
+"adaptive baseline" is an EWMA with a sigma threshold (useful, not
+revolutionary); "no cloud" is a peer feature, not a kernelradar
+exclusive; LSM enforcement is hardening defence-in-depth, not a
+guarantee against root.
 
-Honest reality-check, before someone files an issue:
+## Where kernelradar actually fits
 
-- **No web UI, no graphical timeline.** Output is journald or JSON;
-  if you want dashboards, plug into the
-  [observability stack](docs/integrations/) you already run.
-- **No CNCF backing, micro community.** Falco/Tetragon/Tracee have
-  active issue trackers, dedicated maintainers, and a multi-year
-  track record in production. kernelradar is one maintainer plus
-  whoever shows up.
-- **Pre-1.0 stability.** The full feature surface is implemented
-  and has been production-tested on a single Debian 12 host. That
-  is not the same as "battle-tested across a fleet." Pilot before
-  paging anyone.
-- **Smaller pre-built rule library.** Falco ships thousands of
-  rules curated by an active community. kernelradar ships eight
-  detectors with hand-tuned defaults. If your threat model already
-  matches a Falco rule, run Falco.
-- **No cloud-native scaling story.** kernelradar deploys per-host
-  via systemd. That's a feature for SOHO / on-prem / air-gapped
-  fleets and a non-feature for k8s clusters with hundreds of
-  nodes - if you need centralised policy distribution, look at
-  Tetragon or commercial EDR.
-- **IPv6 in the network detector.** The kernel-side BPF probe is
-  IPv4-only in v0.1; IPv6 connections are not observed.
-  Targeted for v0.1.x.
+Pick `kernelradar` when:
+
+- You run **5-50 on-prem servers** or **edge / IoT / SOHO** boxes
+  and `make && sudo make install` beats deploying a Helm chart for
+  a single host.
+- You want **resident set under 100 MB** and CPU floor under 1 %.
+- You want a **second behavioural signal** (rate deviations from a
+  per-host baseline) on top of whatever rule engine you already
+  run - kernelradar happily coexists with Falco / auditd /
+  Wazuh / SELinux on the same host.
+- The **GPL-2.0 copyleft** matters to you for licensing or
+  governance reasons.
+
+Pick something else when:
+
+- You run **Kubernetes at scale**: Falco's CNCF community and
+  Tetragon's k8s-shaped policies are years ahead.
+- You need a **rule library curated by an active community**: Falco
+  ships thousands of rules, kernelradar eight detectors.
+- You need a **production-grade web UI** out of the box: pair with
+  Wazuh, Elastic, Grafana, or buy commercial EDR.
+- You need **IPv6 outbound monitoring today**: kernelradar's
+  network detector is IPv4-only in v0.1; targeted for v0.1.x.
+- You need a **mature, multi-year track record**: kernelradar is
+  v0.1.0-preview. Pilot it before paging anyone.
 
 ---
 
