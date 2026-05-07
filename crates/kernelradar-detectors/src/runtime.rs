@@ -14,7 +14,9 @@
 
 use anyhow::{Context, Result};
 use aya::{maps::RingBuf, programs::TracePoint, Ebpf};
+use std::os::fd::AsRawFd;
 use std::path::Path;
+use tokio::io::unix::AsyncFd;
 use tokio::signal;
 
 use crate::integrity::verify as verify_bpf;
@@ -71,24 +73,34 @@ impl TracepointDetector {
     }
 
     /// Drain `events_map` (the per-CPU ring buffer) and dispatch every
-    /// payload to `handle` until SIGINT. Polls every 100 ms — the kernel
-    /// side never blocks on userspace, so missed events show up as
+    /// payload to `handle` until SIGINT. The ring buffer's file descriptor
+    /// is registered with tokio as readable-interest; events wake the task
+    /// directly instead of being polled every 100 ms, so end-to-end
+    /// latency is no longer bounded by the polling interval. Missed events
+    /// (kernel produces faster than userspace can drain) still show up as
     /// `kr_stats_<det>_dropped_total` rather than as silent loss.
     pub async fn run<F>(mut self, events_map: &'static str, mut handle: F) -> Result<()>
     where
         F: FnMut(&KrEvent),
     {
-        let mut ring: RingBuf<_> = RingBuf::try_from(
-            self.ebpf
-                .map_mut(events_map)
-                .with_context(|| format!("{events_map} not found"))?,
-        )?;
-
+        // Take ownership of the events map out of Ebpf so the resulting
+        // RingBuf is owned (not borrowed from `&mut self.ebpf`); AsyncFd
+        // needs an owned `T: AsRawFd` to register with the reactor.
+        let map = self
+            .ebpf
+            .take_map(events_map)
+            .with_context(|| format!("{events_map} not found"))?;
+        let ring: RingBuf<aya::maps::MapData> = RingBuf::try_from(map)?;
         let _det = self.name;
+        let mut async_ring =
+            AsyncFd::with_interest(RawFdRing(ring), tokio::io::Interest::READABLE)?;
+
         loop {
             tokio::select! {
                 _ = signal::ctrl_c() => break,
-                _ = tokio::time::sleep(tokio::time::Duration::from_millis(100)) => {
+                ready = async_ring.readable_mut() => {
+                    let mut guard = ready?;
+                    let RawFdRing(ring) = guard.get_inner_mut();
                     while let Some(item) = ring.next() {
                         if item.len() < std::mem::size_of::<KrEvent>() {
                             continue;
@@ -98,9 +110,22 @@ impl TracepointDetector {
                         };
                         handle(&ev);
                     }
+                    guard.clear_ready();
                 }
             }
         }
         Ok(())
+    }
+}
+
+/// Newtype wrapper around `aya::maps::RingBuf` that delegates `AsRawFd`.
+/// Aya's `RingBuf` exposes its fd via `Deref` to `MapData`; making the
+/// blanket `AsRawFd` impl explicit on the wrapper avoids any ambiguity
+/// when `tokio::io::unix::AsyncFd` reaches for the descriptor.
+struct RawFdRing(RingBuf<aya::maps::MapData>);
+
+impl AsRawFd for RawFdRing {
+    fn as_raw_fd(&self) -> std::os::fd::RawFd {
+        self.0.as_raw_fd()
     }
 }
