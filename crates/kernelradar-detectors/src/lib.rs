@@ -22,5 +22,6 @@ pub mod output;
 pub mod preflight;
 pub mod privesc;
 pub mod prometheus;
+pub mod runtime;
 pub mod util;
 pub mod webhook;

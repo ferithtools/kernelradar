@@ -4,13 +4,10 @@
 // Part of the kernelradar project — Linux kernel anomaly detection via BPF.
 // See LICENSE for terms.
 
-use anyhow::{Context, Result};
-use aya::{maps::RingBuf, programs::TracePoint, Ebpf};
-use std::path::Path;
-use tokio::signal;
+use anyhow::Result;
 
 use crate::allowlist::SharedAllowlist;
-use crate::integrity::verify as verify_bpf;
+use crate::runtime::TracepointDetector;
 use crate::util::{comm_str, is_allowed, make_alert, print_alert, read_exe_path_verified};
 use kernelradar_core::event::KrEvent;
 
@@ -66,33 +63,9 @@ impl ContainerDetector {
     }
 
     pub async fn run(&self) -> Result<()> {
-        let path = Path::new(&self.bpf_obj_path);
-        anyhow::ensure!(path.exists(), "BPF object not found: {}", self.bpf_obj_path);
-
-        let bytes = std::fs::read(path)?;
-        verify_bpf("container", &bytes)?;
-        let mut bpf = Ebpf::load(&bytes).context("verifier rejected container BPF")?;
-
-        // Pin kr_stats for external tooling.
-        if let Some(stats) = bpf.map_mut("kr_stats") {
-            let _ = stats.pin("/sys/fs/bpf/kr_stats_container");
-        }
-
-        for (name, tp) in [
-            ("kr_tp_unshare", "sys_enter_unshare"),
-            ("kr_tp_setns", "sys_enter_setns"),
-        ] {
-            let prog: &mut TracePoint = bpf.program_mut(name).context(name)?.try_into()?;
-            prog.load()?;
-            prog.attach("syscalls", tp)
-                .with_context(|| format!("attach {tp}"))?;
-            tracing::info!("attached tracepoint: syscalls/{tp}");
-        }
-
-        let mut ring: RingBuf<_> = RingBuf::try_from(
-            bpf.map_mut("kr_container_events")
-                .context("kr_container_events not found")?,
-        )?;
+        let mut det = TracepointDetector::load("container", &self.bpf_obj_path, "container")?;
+        det.attach_tracepoint("kr_tp_unshare", "syscalls", "sys_enter_unshare")?
+            .attach_tracepoint("kr_tp_setns", "syscalls", "sys_enter_setns")?;
 
         tracing::info!(
             detector = "container",
@@ -100,21 +73,7 @@ impl ContainerDetector {
             "watching unshare() + setns()"
         );
 
-        loop {
-            tokio::select! {
-                _ = signal::ctrl_c() => break,
-                _ = tokio::time::sleep(tokio::time::Duration::from_millis(100)) => {
-                    while let Some(item) = ring.next() {
-                        if item.len() < std::mem::size_of::<KrEvent>() { continue; }
-                        let ev: KrEvent = unsafe {
-                            std::ptr::read_unaligned(item.as_ptr() as *const KrEvent)
-                        };
-                        self.handle(&ev);
-                    }
-                }
-            }
-        }
-        Ok(())
+        det.run("kr_container_events", |ev| self.handle(ev)).await
     }
 
     fn handle(&self, ev: &KrEvent) {

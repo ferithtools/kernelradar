@@ -4,13 +4,10 @@
 // Part of the kernelradar project — Linux kernel anomaly detection via BPF.
 // See LICENSE for terms.
 
-use anyhow::{Context, Result};
-use aya::{maps::RingBuf, programs::TracePoint, Ebpf};
-use std::path::Path;
-use tokio::signal;
+use anyhow::Result;
 
 use crate::allowlist::SharedAllowlist;
-use crate::integrity::verify as verify_bpf;
+use crate::runtime::TracepointDetector;
 use crate::util::{comm_str, is_allowed, make_alert, print_alert, read_exe_path_verified};
 use kernelradar_core::event::KrEvent;
 
@@ -28,33 +25,9 @@ impl KmodDetector {
     }
 
     pub async fn run(&self) -> Result<()> {
-        let path = Path::new(&self.bpf_obj_path);
-        anyhow::ensure!(path.exists(), "BPF object not found: {}", self.bpf_obj_path);
-
-        let bytes = std::fs::read(path)?;
-        verify_bpf("kmod", &bytes)?;
-        let mut bpf = Ebpf::load(&bytes).context("verifier rejected kmod BPF")?;
-
-        // Pin kr_stats for external tooling.
-        if let Some(stats) = bpf.map_mut("kr_stats") {
-            let _ = stats.pin("/sys/fs/bpf/kr_stats_kmod");
-        }
-
-        for (name, tp) in [
-            ("kr_tp_finit_module", "sys_enter_finit_module"),
-            ("kr_tp_init_module", "sys_enter_init_module"),
-        ] {
-            let prog: &mut TracePoint = bpf.program_mut(name).context(name)?.try_into()?;
-            prog.load()?;
-            prog.attach("syscalls", tp)
-                .with_context(|| format!("attach {tp}"))?;
-            tracing::info!("attached tracepoint: syscalls/{tp}");
-        }
-
-        let mut ring: RingBuf<_> = RingBuf::try_from(
-            bpf.map_mut("kr_kmod_events")
-                .context("kr_kmod_events not found")?,
-        )?;
+        let mut det = TracepointDetector::load("kmod", &self.bpf_obj_path, "kmod")?;
+        det.attach_tracepoint("kr_tp_finit_module", "syscalls", "sys_enter_finit_module")?
+            .attach_tracepoint("kr_tp_init_module", "syscalls", "sys_enter_init_module")?;
 
         tracing::info!(
             detector = "kmod",
@@ -62,21 +35,7 @@ impl KmodDetector {
             "watching finit_module() + init_module()"
         );
 
-        loop {
-            tokio::select! {
-                _ = signal::ctrl_c() => break,
-                _ = tokio::time::sleep(tokio::time::Duration::from_millis(100)) => {
-                    while let Some(item) = ring.next() {
-                        if item.len() < std::mem::size_of::<KrEvent>() { continue; }
-                        let ev: KrEvent = unsafe {
-                            std::ptr::read_unaligned(item.as_ptr() as *const KrEvent)
-                        };
-                        self.handle(&ev);
-                    }
-                }
-            }
-        }
-        Ok(())
+        det.run("kr_kmod_events", |ev| self.handle(ev)).await
     }
 
     fn handle(&self, ev: &KrEvent) {

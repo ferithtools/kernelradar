@@ -4,13 +4,10 @@
 // Part of the kernelradar project — Linux kernel anomaly detection via BPF.
 // See LICENSE for terms.
 
-use anyhow::{Context, Result};
-use aya::{maps::RingBuf, programs::TracePoint, Ebpf};
-use std::path::Path;
-use tokio::signal;
+use anyhow::Result;
 
 use crate::allowlist::SharedAllowlist;
-use crate::integrity::verify as verify_bpf;
+use crate::runtime::TracepointDetector;
 use crate::util::{comm_str, is_allowed, make_alert, print_alert, read_exe_path_verified};
 use kernelradar_core::event::KrEvent;
 
@@ -68,32 +65,8 @@ impl BpfLoaderDetector {
     }
 
     pub async fn run(&self) -> Result<()> {
-        let path = Path::new(&self.bpf_obj_path);
-        anyhow::ensure!(path.exists(), "BPF object not found: {}", self.bpf_obj_path);
-
-        let bytes = std::fs::read(path)?;
-        // Hash key matches build.rs `names` table (filename, underscore).
-        verify_bpf("bpf_loader", &bytes)?;
-        let mut bpf = Ebpf::load(&bytes).context("verifier rejected bpf_loader BPF")?;
-
-        // Pin kr_stats so external tools and the Prometheus exporter
-        // can read observed/dropped counts.
-        if let Some(stats) = bpf.map_mut("kr_stats") {
-            let _ = stats.pin("/sys/fs/bpf/kr_stats_bpfl");
-        }
-
-        let tp: &mut TracePoint = bpf
-            .program_mut("kr_tp_bpf_load")
-            .context("kr_tp_bpf_load")?
-            .try_into()?;
-        tp.load()?;
-        tp.attach("syscalls", "sys_enter_bpf")?;
-        tracing::info!("attached tracepoint: syscalls/sys_enter_bpf");
-
-        let mut ring: RingBuf<_> = RingBuf::try_from(
-            bpf.map_mut("kr_bpfl_events")
-                .context("kr_bpfl_events not found")?,
-        )?;
+        let mut det = TracepointDetector::load("bpf_loader", &self.bpf_obj_path, "bpfl")?;
+        det.attach_tracepoint("kr_tp_bpf_load", "syscalls", "sys_enter_bpf")?;
 
         tracing::info!(
             detector = "bpf-loader",
@@ -101,21 +74,7 @@ impl BpfLoaderDetector {
             "watching BPF_PROG_LOAD"
         );
 
-        loop {
-            tokio::select! {
-                _ = signal::ctrl_c() => break,
-                _ = tokio::time::sleep(tokio::time::Duration::from_millis(100)) => {
-                    while let Some(item) = ring.next() {
-                        if item.len() < std::mem::size_of::<KrEvent>() { continue; }
-                        let ev: KrEvent = unsafe {
-                            std::ptr::read_unaligned(item.as_ptr() as *const KrEvent)
-                        };
-                        self.handle(&ev);
-                    }
-                }
-            }
-        }
-        Ok(())
+        det.run("kr_bpfl_events", |ev| self.handle(ev)).await
     }
 
     fn handle(&self, ev: &KrEvent) {

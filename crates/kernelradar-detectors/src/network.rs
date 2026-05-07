@@ -10,15 +10,12 @@
 /// BPF filters out loopback, RFC1918, link-local, CGNAT, multicast.
 /// Userspace adds severity rules for ports commonly used by
 /// reverse shells (4444, 4445, 5555, 6666, 6667, 1337, 31337).
-use anyhow::{Context, Result};
-use aya::{maps::RingBuf, programs::TracePoint, Ebpf};
+use anyhow::Result;
 use std::net::Ipv4Addr;
-use std::path::Path;
-use tokio::signal;
 
 use crate::allowlist::SharedAllowlist;
 use crate::cidr::SharedCidrList;
-use crate::integrity::verify as verify_bpf;
+use crate::runtime::TracepointDetector;
 use crate::util::{comm_str, is_allowed, make_alert, print_alert, read_exe_path_verified};
 use kernelradar_core::event::KrEvent;
 
@@ -46,30 +43,8 @@ impl NetworkDetector {
     }
 
     pub async fn run(&self) -> Result<()> {
-        let path = Path::new(&self.bpf_obj_path);
-        anyhow::ensure!(path.exists(), "BPF object not found: {}", self.bpf_obj_path);
-
-        let bytes = std::fs::read(path)?;
-        verify_bpf("network", &bytes)?;
-        let mut bpf = Ebpf::load(&bytes).context("verifier rejected network BPF")?;
-
-        // Pin kr_stats for external tooling.
-        if let Some(stats) = bpf.map_mut("kr_stats") {
-            let _ = stats.pin("/sys/fs/bpf/kr_stats_network");
-        }
-
-        let tp: &mut TracePoint = bpf
-            .program_mut("kr_tp_connect")
-            .context("kr_tp_connect")?
-            .try_into()?;
-        tp.load()?;
-        tp.attach("syscalls", "sys_enter_connect")?;
-        tracing::info!("attached tracepoint: syscalls/sys_enter_connect");
-
-        let mut ring: RingBuf<_> = RingBuf::try_from(
-            bpf.map_mut("kr_net_events")
-                .context("kr_net_events not found")?,
-        )?;
+        let mut det = TracepointDetector::load("network", &self.bpf_obj_path, "network")?;
+        det.attach_tracepoint("kr_tp_connect", "syscalls", "sys_enter_connect")?;
 
         tracing::info!(
             detector = "network",
@@ -78,21 +53,7 @@ impl NetworkDetector {
             "watching connect() to public IPs"
         );
 
-        loop {
-            tokio::select! {
-                _ = signal::ctrl_c() => break,
-                _ = tokio::time::sleep(tokio::time::Duration::from_millis(100)) => {
-                    while let Some(item) = ring.next() {
-                        if item.len() < std::mem::size_of::<KrEvent>() { continue; }
-                        let ev: KrEvent = unsafe {
-                            std::ptr::read_unaligned(item.as_ptr() as *const KrEvent)
-                        };
-                        self.handle(&ev);
-                    }
-                }
-            }
-        }
-        Ok(())
+        det.run("kr_net_events", |ev| self.handle(ev)).await
     }
 
     fn handle(&self, ev: &KrEvent) {

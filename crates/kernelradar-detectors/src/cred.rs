@@ -8,13 +8,10 @@
 ///
 /// Watches read-only opens of credential files. The READ counterpart
 /// to FIM (which watches writes). Narrower path set to avoid noise.
-use anyhow::{Context, Result};
-use aya::{maps::RingBuf, programs::TracePoint, Ebpf};
-use std::path::Path;
-use tokio::signal;
+use anyhow::Result;
 
 use crate::allowlist::SharedAllowlist;
-use crate::integrity::verify as verify_bpf;
+use crate::runtime::TracepointDetector;
 use crate::util::{comm_str, is_allowed, make_alert, print_alert, read_exe_path_verified};
 use kernelradar_core::event::KrEvent;
 
@@ -120,30 +117,8 @@ impl CredDetector {
     }
 
     pub async fn run(&self) -> Result<()> {
-        let path = Path::new(&self.bpf_obj_path);
-        anyhow::ensure!(path.exists(), "BPF object not found: {}", self.bpf_obj_path);
-
-        let bytes = std::fs::read(path)?;
-        verify_bpf("cred", &bytes)?;
-        let mut bpf = Ebpf::load(&bytes).context("verifier rejected cred BPF")?;
-
-        // Pin kr_stats for external tooling.
-        if let Some(stats) = bpf.map_mut("kr_stats") {
-            let _ = stats.pin("/sys/fs/bpf/kr_stats_cred");
-        }
-
-        let tp: &mut TracePoint = bpf
-            .program_mut("kr_tp_openat_read")
-            .context("kr_tp_openat_read")?
-            .try_into()?;
-        tp.load()?;
-        tp.attach("syscalls", "sys_enter_openat")?;
-        tracing::info!("attached tracepoint: syscalls/sys_enter_openat (cred)");
-
-        let mut ring: RingBuf<_> = RingBuf::try_from(
-            bpf.map_mut("kr_cred_events")
-                .context("kr_cred_events not found")?,
-        )?;
+        let mut det = TracepointDetector::load("cred", &self.bpf_obj_path, "cred")?;
+        det.attach_tracepoint("kr_tp_openat_read", "syscalls", "sys_enter_openat")?;
 
         tracing::info!(
             detector = "cred",
@@ -151,21 +126,7 @@ impl CredDetector {
             "watching reads of credential files"
         );
 
-        loop {
-            tokio::select! {
-                _ = signal::ctrl_c() => break,
-                _ = tokio::time::sleep(tokio::time::Duration::from_millis(100)) => {
-                    while let Some(item) = ring.next() {
-                        if item.len() < std::mem::size_of::<KrEvent>() { continue; }
-                        let ev: KrEvent = unsafe {
-                            std::ptr::read_unaligned(item.as_ptr() as *const KrEvent)
-                        };
-                        self.handle(&ev);
-                    }
-                }
-            }
-        }
-        Ok(())
+        det.run("kr_cred_events", |ev| self.handle(ev)).await
     }
 
     fn handle(&self, ev: &KrEvent) {

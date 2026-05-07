@@ -11,13 +11,10 @@
 ///
 /// Default allowlist includes well-known debuggers (gdb, lldb, strace)
 /// and tracing tools so legitimate development isn't flagged.
-use anyhow::{Context, Result};
-use aya::{maps::RingBuf, programs::TracePoint, Ebpf};
-use std::path::Path;
-use tokio::signal;
+use anyhow::Result;
 
 use crate::allowlist::SharedAllowlist;
-use crate::integrity::verify as verify_bpf;
+use crate::runtime::TracepointDetector;
 use crate::util::{comm_str, is_allowed, make_alert, print_alert, read_exe_path_verified};
 use kernelradar_core::event::KrEvent;
 
@@ -47,33 +44,13 @@ impl InjectionDetector {
     }
 
     pub async fn run(&self) -> Result<()> {
-        let path = Path::new(&self.bpf_obj_path);
-        anyhow::ensure!(path.exists(), "BPF object not found: {}", self.bpf_obj_path);
-
-        let bytes = std::fs::read(path)?;
-        verify_bpf("injection", &bytes)?;
-        let mut bpf = Ebpf::load(&bytes).context("verifier rejected injection BPF")?;
-
-        // Pin kr_stats for external tooling.
-        if let Some(stats) = bpf.map_mut("kr_stats") {
-            let _ = stats.pin("/sys/fs/bpf/kr_stats_injection");
-        }
-
-        for (name, tp) in [
-            ("kr_tp_ptrace", "sys_enter_ptrace"),
-            ("kr_tp_pvm_writev", "sys_enter_process_vm_writev"),
-        ] {
-            let prog: &mut TracePoint = bpf.program_mut(name).context(name)?.try_into()?;
-            prog.load()?;
-            prog.attach("syscalls", tp)
-                .with_context(|| format!("attach {tp}"))?;
-            tracing::info!("attached tracepoint: syscalls/{tp}");
-        }
-
-        let mut ring: RingBuf<_> = RingBuf::try_from(
-            bpf.map_mut("kr_inj_events")
-                .context("kr_inj_events not found")?,
-        )?;
+        let mut det = TracepointDetector::load("injection", &self.bpf_obj_path, "injection")?;
+        det.attach_tracepoint("kr_tp_ptrace", "syscalls", "sys_enter_ptrace")?
+            .attach_tracepoint(
+                "kr_tp_pvm_writev",
+                "syscalls",
+                "sys_enter_process_vm_writev",
+            )?;
 
         tracing::info!(
             detector = "injection",
@@ -81,21 +58,7 @@ impl InjectionDetector {
             "watching ptrace() + process_vm_writev()"
         );
 
-        loop {
-            tokio::select! {
-                _ = signal::ctrl_c() => break,
-                _ = tokio::time::sleep(tokio::time::Duration::from_millis(100)) => {
-                    while let Some(item) = ring.next() {
-                        if item.len() < std::mem::size_of::<KrEvent>() { continue; }
-                        let ev: KrEvent = unsafe {
-                            std::ptr::read_unaligned(item.as_ptr() as *const KrEvent)
-                        };
-                        self.handle(&ev);
-                    }
-                }
-            }
-        }
-        Ok(())
+        det.run("kr_inj_events", |ev| self.handle(ev)).await
     }
 
     fn handle(&self, ev: &KrEvent) {

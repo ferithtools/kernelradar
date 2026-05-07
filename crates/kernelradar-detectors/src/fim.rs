@@ -10,13 +10,10 @@
 /// sensitive paths under /etc, /root, /home. BPF does cheap prefix
 /// filtering; this code does fine-grained matching against a list
 /// of monitored paths and exact rules.
-use anyhow::{Context, Result};
-use aya::{maps::RingBuf, programs::TracePoint, Ebpf};
-use std::path::Path;
-use tokio::signal;
+use anyhow::Result;
 
 use crate::allowlist::SharedAllowlist;
-use crate::integrity::verify as verify_bpf;
+use crate::runtime::TracepointDetector;
 use crate::util::{comm_str, is_allowed, make_alert, print_alert, read_exe_path_verified};
 use kernelradar_core::event::KrEvent;
 
@@ -157,30 +154,8 @@ impl FimDetector {
     }
 
     pub async fn run(&self) -> Result<()> {
-        let path = Path::new(&self.bpf_obj_path);
-        anyhow::ensure!(path.exists(), "BPF object not found: {}", self.bpf_obj_path);
-
-        let bytes = std::fs::read(path)?;
-        verify_bpf("fim", &bytes)?;
-        let mut bpf = Ebpf::load(&bytes).context("verifier rejected fim BPF")?;
-
-        // Pin kr_stats for external tooling.
-        if let Some(stats) = bpf.map_mut("kr_stats") {
-            let _ = stats.pin("/sys/fs/bpf/kr_stats_fim");
-        }
-
-        let tp: &mut TracePoint = bpf
-            .program_mut("kr_tp_openat")
-            .context("kr_tp_openat")?
-            .try_into()?;
-        tp.load()?;
-        tp.attach("syscalls", "sys_enter_openat")?;
-        tracing::info!("attached tracepoint: syscalls/sys_enter_openat");
-
-        let mut ring: RingBuf<_> = RingBuf::try_from(
-            bpf.map_mut("kr_fim_events")
-                .context("kr_fim_events not found")?,
-        )?;
+        let mut det = TracepointDetector::load("fim", &self.bpf_obj_path, "fim")?;
+        det.attach_tracepoint("kr_tp_openat", "syscalls", "sys_enter_openat")?;
 
         tracing::info!(
             detector = "fim",
@@ -188,21 +163,7 @@ impl FimDetector {
             "watching writes to /etc, /root, /home/*/.ssh"
         );
 
-        loop {
-            tokio::select! {
-                _ = signal::ctrl_c() => break,
-                _ = tokio::time::sleep(tokio::time::Duration::from_millis(100)) => {
-                    while let Some(item) = ring.next() {
-                        if item.len() < std::mem::size_of::<KrEvent>() { continue; }
-                        let ev: KrEvent = unsafe {
-                            std::ptr::read_unaligned(item.as_ptr() as *const KrEvent)
-                        };
-                        self.handle(&ev);
-                    }
-                }
-            }
-        }
-        Ok(())
+        det.run("kr_fim_events", |ev| self.handle(ev)).await
     }
 
     fn handle(&self, ev: &KrEvent) {
