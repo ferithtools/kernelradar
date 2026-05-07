@@ -85,6 +85,11 @@ pub fn check_capabilities() -> bool {
 
 /// Warn if the BPF object directory is world-writable.
 /// Recommend a read-only bind mount when applicable.
+///
+/// Also flags a non-uid-0 owner as a load-risk: an attacker controlling
+/// the directory's owner can swap `.bpf.o` content between daemon
+/// restarts and the integrity check is the only thing standing between
+/// them and arbitrary BPF loaded into the kernel.
 pub fn check_bpf_dir(path: &str) {
     let p = Path::new(path);
     if !p.exists() {
@@ -92,10 +97,22 @@ pub fn check_bpf_dir(path: &str) {
         return;
     }
 
-    // Permission check
+    // Ownership + permission check
+    use std::os::unix::fs::MetadataExt;
     use std::os::unix::fs::PermissionsExt;
     if let Ok(meta) = std::fs::metadata(p) {
         let mode = meta.permissions().mode();
+        let uid = meta.uid();
+
+        if uid != 0 {
+            tracing::warn!(
+                path,
+                uid = uid,
+                "preflight: BPF dir is not owned by root - \
+                 the owner can replace .bpf.o files between restarts. \
+                 chown root:root and chmod 0755."
+            );
+        }
         if mode & 0o002 != 0 {
             tracing::warn!(
                 path,
