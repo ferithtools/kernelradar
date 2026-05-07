@@ -6,8 +6,75 @@ the project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-The next planned release is the **v0.1.x** patch series (Q2 2026)
-covering `--dry-run` / `--audit-only` enforcement, `kr_stats`
+Post-publication polish on top of v0.1.0; no new features, no API
+changes a downstream user can observe.
+
+### Changed - performance
+
+- Detector ring buffers are now driven by `tokio::io::unix::AsyncFd`
+  registered against the BPF ring's file descriptor. Tasks wake on
+  epoll-ready instead of polling every 100 ms, dropping the
+  end-to-end alert latency floor from "up to 100 ms" to a few
+  microseconds and removing the idle wake-up cost on otherwise-quiet
+  daemons.
+- Detector identifiers now flow through the alert pipeline as
+  `Cow<'static, str>` (always `Cow::Borrowed` for regular alerts,
+  `Cow::Owned` only for the synthetic `*.anomaly` / `*.burst`
+  markers). Saves three `String` allocations per emitted alert in
+  `make_alert`, the rate limiter key, and the metrics key.
+
+### Changed - internals
+
+- Detector load + attach + ring-buffer drive collapsed into a shared
+  `runtime::TracepointDetector` builder. Each individual detector
+  module shrank by ~30 lines; the per-detector dance of `fs::read +
+  verify_bpf + Ebpf::load + pin kr_stats + try_into TracePoint +
+  attach + RingBuf::try_from + polling loop` now lives in exactly
+  one place.
+- CLI bootstrap (webhook init, Prometheus init, rate limiter,
+  baseline, integrity strict mode, hourly summary spawn, preflight
+  checks, LSM install) extracted from `main.rs` into a dedicated
+  `bootstrap` module. `main.rs` reads as the CLI control flow now,
+  not as a long sequence of subsystem initialisers.
+
+### Fixed
+
+- Two detectors (`fim`, `cred`) reconstructed the path payload from
+  `[u64; 4]` via `mem::transmute` to `[u8; 32]`. Replaced with a
+  word-by-word `to_ne_bytes()` reassembly - same native-endianness
+  semantics, no `unsafe` needed.
+- `build.rs` no longer panics on a backdated build host: the
+  `SystemTime::now().duration_since(UNIX_EPOCH).unwrap()` is now
+  `unwrap_or(0)`, and the SHA-256 word load avoids
+  `try_into().unwrap()` by indexing the 64-byte chunk directly.
+- Rust 1.95 turned several clippy warnings into hard errors under
+  `-D warnings` (`match_like_matches_macro`, `unnecessary_map_or`,
+  `io_other_error`, `needless_borrow`, `needless_return`,
+  `dead_code`, `items_after_test_module`, `unused_imports`). All
+  are now behaviour-preserving rewrites.
+
+### Documentation
+
+- README: dropped the bilingual EN+RU layout in favour of an
+  English-only canonical version.
+- README + `docs/architecture.md`: unified the build instructions
+  on `make` (matches CONTRIBUTING.md). Removed the long-standing
+  false claim that BPF objects were committed as pre-compiled `.o`
+  files.
+- `docs/architecture.md` rewritten under v0.1.0 reality: eight
+  detectors instead of four, accurate kernel hooks, integrity
+  check, LSM enforcement, rate limiter, baseline, AsyncFd-driven
+  ring buffer, real TOML config schema.
+- All em-dashes (U+2014) replaced with ASCII hyphens.
+
+### Infrastructure
+
+- Removed `rc/*.png` (1.3 MB of branding assets) from the source
+  tree; logos are distributed via GitHub social-preview /
+  release-asset settings instead.
+
+The next planned **release** is the **v0.1.x** patch series (Q2
+2026) covering `--dry-run` / `--audit-only` enforcement, `kr_stats`
 counters in the Prometheus exporter, IPv6 destination CIDR
 allowlist, per-detector documentation, the email-integration
 recipe, and the first `.deb` package.
