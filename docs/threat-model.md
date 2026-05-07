@@ -59,6 +59,41 @@ Does not:
 | The kernelradar daemon process (runs with `CAP_BPF` + `CAP_PERFMON` + `CAP_SYS_RESOURCE` + `CAP_SYS_ADMIN` under the shipped systemd unit; full root not required on kernels >= 5.8) | Network input to any service running on the host |
 | The on-disk `.bpf.o` files (build-time SHA-256 verified at load) | The host's `/etc`, `/root`, `/home` filesystems (the FIM and cred detectors monitor them) |
 
+## FIM and cred path-coverage limitations (v0.1)
+
+The FIM and cred detectors hook `sys_enter_openat` and read up to
+32 bytes of the *user-supplied* path argument. They cannot see the
+canonical path the kernel actually resolves. That means several
+bypasses are visible to a deliberate attacker:
+
+- `chdir("/etc"); openat(AT_FDCWD, "shadow", O_RDONLY)` - the path
+  argument becomes `"shadow"` and the prefix check fails.
+- `openat(dirfd, "shadow", O_RDONLY)` where `dirfd` is an open file
+  descriptor on `/etc/` - same thing.
+- Bind mounts that overlay sensitive directories at unusual paths
+  (`/mnt/etc/shadow` shadowing `/etc/shadow`).
+- Long indirect paths longer than the 32-byte BPF read window.
+
+What v0.1 *does* detect:
+
+- Direct paths: `openat(AT_FDCWD, "/etc/shadow", O_RDONLY)` - the
+  prefix matches and the userspace rule fires.
+- `/..` traversal: paths containing `/..` (e.g.
+  `/var/lib/../../etc/shadow`) emit a CRITICAL alert with
+  `event_type = PATH_TRAVERSAL` regardless of the prefix - there
+  is no legitimate use of `/..` against sensitive paths in normal
+  workloads, so this fires loudly.
+
+The full fix is an `lsm/file_open` hook with `bpf_d_path()` to read
+the kernel-resolved canonical path. That requires a new BPF
+program, a wider event payload (the canonical path can be up to
+PATH_MAX = 4096 bytes), and is scheduled for v0.2.
+
+Until then, treat FIM and cred as a *good signal against
+unsophisticated attackers and accidental access*, and not as a
+boundary against a targeted attacker who knows kernelradar is
+installed.
+
 ## Hard limits, by design
 
 - **kernelradar cannot detect attacks that happened before it

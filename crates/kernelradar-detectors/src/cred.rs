@@ -140,11 +140,6 @@ impl CredDetector {
         let path = String::from_utf8_lossy(path_bytes.split(|&b| b == 0).next().unwrap_or(&[]))
             .to_string();
 
-        let rule = match match_cred(&path) {
-            Some(r) => r,
-            None => return,
-        };
-
         let comm = comm_str(ev);
         let exe = read_exe_path_verified(ev.pid, &comm);
         let al = self.allowlist.snapshot();
@@ -152,10 +147,31 @@ impl CredDetector {
             return;
         }
 
+        // Path-traversal probe bypasses the rule table for the same
+        // reason as in fim.rs: a read-mode openat with "/.." in the
+        // argument is never legitimate.
+        if ev.event_type == 2 {
+            let title = format!("cred path-traversal attempt: {path} by {comm}");
+            let ctx = serde_json::json!({
+                "path":      path,
+                "rule":      "path-traversal heuristic",
+                "exe":       exe,
+                "traversal": true,
+            });
+            let alert = make_alert(ev, exe.as_deref(), "cred", &title, ctx);
+            print_alert(&alert, false);
+            return;
+        }
+
+        let rule = match match_cred(&path) {
+            Some(r) => r,
+            None => return,
+        };
+
         let mut ev_copy = ev.clone();
         ev_copy.severity = rule.severity;
 
-        let title = format!("read access to {} by {}", path, comm);
+        let title = format!("read access to {path} by {comm}");
         let ctx = serde_json::json!({
             "path":  path,
             "rule":  rule.pattern,

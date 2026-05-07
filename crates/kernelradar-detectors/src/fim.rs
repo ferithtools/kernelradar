@@ -177,12 +177,6 @@ impl FimDetector {
         let path = String::from_utf8_lossy(path_bytes.split(|&b| b == 0).next().unwrap_or(&[]))
             .to_string();
 
-        // Userspace fine-grained match
-        let rule = match match_path(&path) {
-            Some(r) => r,
-            None => return, // BPF filter passed but not in our rules
-        };
-
         let comm = comm_str(ev);
         let exe = read_exe_path_verified(ev.pid, &comm);
         let al = self.allowlist.snapshot();
@@ -190,11 +184,34 @@ impl FimDetector {
             return;
         }
 
+        // Path-traversal probe (event_type == KR_FIM_PATH_TRAVERSAL = 2)
+        // bypasses the rule table: there is no legitimate write-mode
+        // openat() with "/.." in the argument, so we always emit at the
+        // BPF-supplied CRITICAL severity.
+        if ev.event_type == 2 {
+            let title = format!("FIM path-traversal attempt: {path} by {comm}");
+            let ctx = serde_json::json!({
+                "path":      path,
+                "rule":      "path-traversal heuristic",
+                "exe":       exe,
+                "traversal": true,
+            });
+            let alert = make_alert(ev, exe.as_deref(), "fim", &title, ctx);
+            print_alert(&alert, false);
+            return;
+        }
+
+        // Userspace fine-grained match for the regular write-open case
+        let rule = match match_path(&path) {
+            Some(r) => r,
+            None => return, // BPF filter passed but not in our rules
+        };
+
         // Override BPF severity with rule severity
         let mut ev_copy = ev.clone();
         ev_copy.severity = rule.severity;
 
-        let title = format!("write open to {} by {}", path, comm);
+        let title = format!("write open to {path} by {comm}");
         let ctx = serde_json::json!({
             "path":    path,
             "rule":    rule.pattern,

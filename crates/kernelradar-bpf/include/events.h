@@ -41,6 +41,7 @@
 /* ── FIM event types ────────────────────────────────────────────────── */
 
 #define KR_FIM_OPEN_WRITE       1   /* openat() with write/append/create */
+#define KR_FIM_PATH_TRAVERSAL   2   /* "/.." sequence inside path arg */
 
 /* ── Network event types ────────────────────────────────────────────── */
 
@@ -55,6 +56,7 @@
 /* ── Credential theft event types ───────────────────────────────────── */
 
 #define KR_CRED_READ            1   /* read open of credential file */
+#define KR_CRED_PATH_TRAVERSAL  2   /* "/.." sequence inside path arg */
 
 /* ── Self-protect event types ───────────────────────────────────────── */
 

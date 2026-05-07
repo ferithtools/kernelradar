@@ -51,6 +51,35 @@ static __always_inline int is_sensitive_prefix(const char *p)
     return 0;
 }
 
+/* Returns 1 if `p` (NUL-terminated, scanned up to `max` bytes)
+ * contains a "/.." sequence. Useful as a low-cost traversal probe:
+ * paths like "/var/lib/../../etc/shadow" pass is_sensitive_prefix=0
+ * (they start with "/v") but are clearly trying to reach sensitive
+ * directories. Manual unroll keeps the BPF verifier happy.
+ *
+ * Limitations (see docs/threat-model.md):
+ *   - chdir()+relative openat (path arg becomes "shadow") is NOT
+ *     covered here - this only sees the path actually passed to
+ *     openat(), not its kernel-resolved canonical form.
+ *   - openat(dirfd, "shadow", ...) likewise.
+ *   - bind-mount tricks (`/mnt/etc/shadow` shadowing /etc) are not
+ *     detected. Full coverage requires lsm/file_open + bpf_d_path,
+ *     scheduled for v0.2.
+ */
+static __always_inline int contains_dotdot(const char *p, int max)
+{
+    #pragma unroll
+    for (int i = 0; i < 30; i++) {
+        if (i + 2 >= max)
+            return 0;
+        if (p[i] == 0)
+            return 0;
+        if (p[i] == '/' && p[i + 1] == '.' && p[i + 2] == '.')
+            return 1;
+    }
+    return 0;
+}
+
 SEC("tracepoint/syscalls/sys_enter_openat")
 int kr_tp_openat(struct trace_event_raw_sys_enter *ctx)
 {
@@ -69,12 +98,18 @@ int kr_tp_openat(struct trace_event_raw_sys_enter *ctx)
     if (len <= 0)
         return 0;
 
-    if (!is_sensitive_prefix(path))
+    int sensitive = is_sensitive_prefix(path);
+    int traversal = contains_dotdot(path, 32);
+
+    if (!sensitive && !traversal)
         return 0;
 
     kr_stat_inc(KR_STAT_FIM_OBSERVED);
 
-    /* Sensitive - emit full event */
+    /* Sensitive - emit full event. Path-traversal attempts always
+     * raise CRITICAL because the only legitimate caller hitting
+     * write-mode openat with `/..` in the argument is a deliberate
+     * obfuscation. */
     struct kr_event *e = bpf_ringbuf_reserve(&kr_fim_events,
                                               sizeof(*e), 0);
     if (!e) {
@@ -91,8 +126,8 @@ int kr_tp_openat(struct trace_event_raw_sys_enter *ctx)
     e->uid          = (__u32)ug;
     e->gid          = (__u32)(ug >> 32);
     e->detector_id  = KR_DETECTOR_FIM;
-    e->severity     = KR_SEV_WARNING;
-    e->event_type   = KR_FIM_OPEN_WRITE;
+    e->severity     = traversal ? KR_SEV_CRITICAL : KR_SEV_WARNING;
+    e->event_type   = traversal ? KR_FIM_PATH_TRAVERSAL : KR_FIM_OPEN_WRITE;
 
     /* Pack path bytes into the 32-byte data[] field.
      * data is __u64[4] = 32 bytes; we treat it as char[32]. */

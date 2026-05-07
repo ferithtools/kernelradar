@@ -52,6 +52,25 @@ static __always_inline int is_cred_candidate(const char *p)
     return 0;
 }
 
+/* Returns 1 if `p` (NUL-terminated, scanned up to `max` bytes)
+ * contains a "/.." sequence. Useful as a low-cost traversal probe
+ * - see fim.bpf.c for the rationale and the documented
+ * limitations (chdir+relative, openat with dirfd, bind mounts).
+ */
+static __always_inline int contains_dotdot(const char *p, int max)
+{
+    #pragma unroll
+    for (int i = 0; i < 30; i++) {
+        if (i + 2 >= max)
+            return 0;
+        if (p[i] == 0)
+            return 0;
+        if (p[i] == '/' && p[i + 1] == '.' && p[i + 2] == '.')
+            return 1;
+    }
+    return 0;
+}
+
 SEC("tracepoint/syscalls/sys_enter_openat")
 int kr_tp_openat_read(struct trace_event_raw_sys_enter *ctx)
 {
@@ -68,7 +87,10 @@ int kr_tp_openat_read(struct trace_event_raw_sys_enter *ctx)
     if (len <= 0)
         return 0;
 
-    if (!is_cred_candidate(path))
+    int candidate = is_cred_candidate(path);
+    int traversal = contains_dotdot(path, 32);
+
+    if (!candidate && !traversal)
         return 0;
 
     kr_stat_inc(KR_STAT_CRED_OBSERVED);
@@ -89,8 +111,8 @@ int kr_tp_openat_read(struct trace_event_raw_sys_enter *ctx)
     e->uid          = (__u32)ug;
     e->gid          = (__u32)(ug >> 32);
     e->detector_id  = KR_DETECTOR_CRED;
-    e->severity     = KR_SEV_WARNING;
-    e->event_type   = KR_CRED_READ;
+    e->severity     = traversal ? KR_SEV_CRITICAL : KR_SEV_WARNING;
+    e->event_type   = traversal ? KR_CRED_PATH_TRAVERSAL : KR_CRED_READ;
 
     __builtin_memcpy(&e->data[0], path, 32);
 
