@@ -173,34 +173,63 @@ fn load_selfprotect(path: &str, btf: &Btf) -> Result<Ebpf> {
 
 fn load_bpf_enforce(path: &str, btf: &Btf, allowlist: &[String]) -> Result<Ebpf> {
     let mut bpf = load_lsm(path, btf, "enforce_bpf", "kr_bpf_enforce")?;
-
     let map = bpf
         .take_map("kr_bpf_allowed")
         .context("kr_bpf_allowed map missing")?;
     let mut hm: HashMap<MapData, [u8; 16], u8> = HashMap::try_from(map)?;
-    for entry in allowlist {
-        let mut key = [0u8; 16];
-        let bytes = entry.as_bytes();
-        let n = bytes.len().min(15);
-        key[..n].copy_from_slice(&bytes[..n]);
-        hm.insert(key, 1u8, 0)?;
-    }
+    populate_comm_allowlist(&mut hm, allowlist, "bpf_allowlist")?;
     Ok(bpf)
 }
 
 fn load_kmod_enforce(path: &str, btf: &Btf, allowlist: &[String]) -> Result<Ebpf> {
     let mut bpf = load_lsm(path, btf, "enforce_kmod", "kr_kmod_enforce")?;
-
     let map = bpf
         .take_map("kr_kmod_allowed")
         .context("kr_kmod_allowed map missing")?;
     let mut hm: HashMap<MapData, [u8; 16], u8> = HashMap::try_from(map)?;
+    populate_comm_allowlist(&mut hm, allowlist, "kmod_allowlist")?;
+    Ok(bpf)
+}
+
+/// Insert each allowlist entry into the BPF comm-keyed map.
+///
+/// Entries longer than `TASK_COMM_LEN - 1` (15 bytes) are silently
+/// truncated by the kernel side and would alias against any other
+/// entry sharing the first 15 bytes ("systemd-resolved" and
+/// "systemd-resolveX" both collapse to "systemd-resolve\0"). Refuse
+/// such entries at load time and log a loud warning so operators
+/// notice instead of getting a security boundary that depends on
+/// tmprosperity. Empty entries would match any process whose comm
+/// happens to be all zeros, so they are also refused.
+fn populate_comm_allowlist(
+    hm: &mut HashMap<MapData, [u8; 16], u8>,
+    allowlist: &[String],
+    cfg_name: &str,
+) -> Result<()> {
     for entry in allowlist {
-        let mut key = [0u8; 16];
         let bytes = entry.as_bytes();
-        let n = bytes.len().min(15);
-        key[..n].copy_from_slice(&bytes[..n]);
+        if bytes.is_empty() {
+            tracing::warn!(
+                cfg = cfg_name,
+                "LSM enforcement: empty allowlist entry ignored"
+            );
+            continue;
+        }
+        if bytes.len() > 15 {
+            tracing::warn!(
+                cfg = cfg_name,
+                entry = entry.as_str(),
+                len = bytes.len(),
+                "LSM enforcement: allowlist entry too long for TASK_COMM_LEN-1 \
+                 (15 bytes) - the kernel side compares only the first 15 bytes, \
+                 so this entry would collide with any other 15-byte prefix. \
+                 Entry refused; pick a unique name <= 15 bytes."
+            );
+            continue;
+        }
+        let mut key = [0u8; 16];
+        key[..bytes.len()].copy_from_slice(bytes);
         hm.insert(key, 1u8, 0)?;
     }
-    Ok(bpf)
+    Ok(())
 }
