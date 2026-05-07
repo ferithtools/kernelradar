@@ -6,10 +6,10 @@
 
 use crate::event::Severity;
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct Alert {
     /// Sequential local id (per-process)
     pub id: u64,
@@ -17,7 +17,10 @@ pub struct Alert {
     pub correlation_id: Uuid,
     pub timestamp: DateTime<Utc>,
     pub severity: Severity,
-    pub detector: String,
+    /// Detector identifier; always a string literal from the detector
+    /// crate, so `&'static str` lets the entire alert pipeline avoid the
+    /// per-event String allocation that "privesc".to_string() would cost.
+    pub detector: &'static str,
     /// Detector-specific event subtype (mirrors `KrEvent::event_type`).
     /// Used by the rate-limiter as part of the dedup key.
     pub event_type: u16,

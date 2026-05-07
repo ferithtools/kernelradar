@@ -4,7 +4,11 @@
 // Part of the kernelradar project — Linux kernel anomaly detection via BPF.
 // See LICENSE for terms.
 
-/// Alert counters and hourly summary.
+//! Alert counters and hourly summary.
+//!
+//! Detector names enter the counters as `&'static str` (always string
+//! literals from the detector crate), so accumulating one event into the
+//! BTreeMap is just a key copy — no `to_string()` allocation per alert.
 use std::collections::BTreeMap;
 use std::sync::Mutex;
 use std::sync::OnceLock;
@@ -17,15 +21,15 @@ use crate::dedup::drain_suppressed;
 #[derive(Default)]
 struct Counters {
     /// (detector, severity) → count since last summary
-    bucket_emitted: BTreeMap<(String, Severity), u64>,
+    bucket_emitted: BTreeMap<(&'static str, Severity), u64>,
     /// (detector, severity) → cumulative since process start
-    total_emitted: BTreeMap<(String, Severity), u64>,
+    total_emitted: BTreeMap<(&'static str, Severity), u64>,
     /// (detector, severity) → suppressed since last summary
-    bucket_suppressed: BTreeMap<(String, Severity), u64>,
+    bucket_suppressed: BTreeMap<(&'static str, Severity), u64>,
     /// (detector) → burst count cumulative
-    total_bursts: BTreeMap<String, u64>,
+    total_bursts: BTreeMap<&'static str, u64>,
     /// (detector) → anomaly count cumulative
-    total_anomalies: BTreeMap<String, u64>,
+    total_anomalies: BTreeMap<&'static str, u64>,
 }
 
 static COUNTERS: OnceLock<Mutex<Counters>> = OnceLock::new();
@@ -34,30 +38,28 @@ fn counters() -> &'static Mutex<Counters> {
     COUNTERS.get_or_init(|| Mutex::new(Counters::default()))
 }
 
-pub fn record_alert(detector: &str, severity: Severity) {
+pub fn record_alert(detector: &'static str, severity: Severity) {
     if let Ok(mut c) = counters().lock() {
-        let key = (detector.to_string(), severity);
-        *c.bucket_emitted.entry(key.clone()).or_insert(0) += 1;
-        *c.total_emitted.entry(key).or_insert(0) += 1;
+        *c.bucket_emitted.entry((detector, severity)).or_insert(0) += 1;
+        *c.total_emitted.entry((detector, severity)).or_insert(0) += 1;
     }
 }
 
-pub fn record_suppressed(detector: &str, severity: Severity) {
+pub fn record_suppressed(detector: &'static str, severity: Severity) {
     if let Ok(mut c) = counters().lock() {
-        let key = (detector.to_string(), severity);
-        *c.bucket_suppressed.entry(key).or_insert(0) += 1;
+        *c.bucket_suppressed.entry((detector, severity)).or_insert(0) += 1;
     }
 }
 
-pub fn record_burst(detector: &str) {
+pub fn record_burst(detector: &'static str) {
     if let Ok(mut c) = counters().lock() {
-        *c.total_bursts.entry(detector.to_string()).or_insert(0) += 1;
+        *c.total_bursts.entry(detector).or_insert(0) += 1;
     }
 }
 
-pub fn record_anomaly(detector: &str) {
+pub fn record_anomaly(detector: &'static str) {
     if let Ok(mut c) = counters().lock() {
-        *c.total_anomalies.entry(detector.to_string()).or_insert(0) += 1;
+        *c.total_anomalies.entry(detector).or_insert(0) += 1;
     }
 }
 
@@ -124,21 +126,21 @@ fn emit_summary() {
 }
 
 /// Cumulative totals + bursts for `kernelradar status`.
-pub fn cumulative_totals() -> BTreeMap<(String, Severity), u64> {
+pub fn cumulative_totals() -> BTreeMap<(&'static str, Severity), u64> {
     counters()
         .lock()
         .map(|c| c.total_emitted.clone())
         .unwrap_or_default()
 }
 
-pub fn cumulative_bursts() -> BTreeMap<String, u64> {
+pub fn cumulative_bursts() -> BTreeMap<&'static str, u64> {
     counters()
         .lock()
         .map(|c| c.total_bursts.clone())
         .unwrap_or_default()
 }
 
-pub fn cumulative_anomalies() -> BTreeMap<String, u64> {
+pub fn cumulative_anomalies() -> BTreeMap<&'static str, u64> {
     counters()
         .lock()
         .map(|c| c.total_anomalies.clone())

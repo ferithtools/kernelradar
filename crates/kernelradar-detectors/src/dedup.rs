@@ -22,8 +22,11 @@ use std::time::{Duration, Instant};
 
 use kernelradar_core::event::Severity;
 
-/// (detector, comm, event_type)
-type Key = (String, String, u16);
+/// (detector, comm, event_type). The detector half is `&'static str`
+/// because every caller passes a string literal — the rate-limiter
+/// inserts ~one event/sec under load, so saving a `String` allocation
+/// per check matters.
+type Key = (&'static str, String, u16);
 
 #[derive(Debug, Clone, Copy)]
 pub struct RateLimitConfig {
@@ -222,12 +225,9 @@ pub fn init(config: RateLimitConfig) {
 }
 
 /// Make a decision for an alert.
-pub fn check(detector: &str, comm: &str, event_type: u16, severity: Severity) -> Decision {
+pub fn check(detector: &'static str, comm: &str, event_type: u16, severity: Severity) -> Decision {
     let mut rl = lock();
-    rl.check(
-        (detector.to_string(), comm.to_string(), event_type),
-        severity,
-    )
+    rl.check((detector, comm.to_string(), event_type), severity)
 }
 
 /// Drain suppressed counters since last drain.
