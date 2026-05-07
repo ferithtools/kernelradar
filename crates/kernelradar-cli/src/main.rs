@@ -13,7 +13,7 @@ use kernelradar_detectors::{
     allowlist::SharedAllowlist,
     baseline::{
         in_learning, init_with_config as init_baseline, reset_global as baseline_reset,
-        save as baseline_save, snapshot as baseline_snapshot, spawn_periodic_save, BaselineConfig,
+        snapshot as baseline_snapshot, spawn_periodic_save, BaselineConfig,
     },
     bpf_loader::BpfLoaderDetector,
     cidr::{parse_all as parse_cidrs, SharedCidrList},
