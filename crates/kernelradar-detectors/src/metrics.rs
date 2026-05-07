@@ -6,9 +6,14 @@
 
 //! Alert counters and hourly summary.
 //!
-//! Detector names enter the counters as `&'static str` (always string
-//! literals from the detector crate), so accumulating one event into the
-//! BTreeMap is just a key copy — no `to_string()` allocation per alert.
+//! Detector names enter the counters as `Cow<'static, str>` and arrive
+//! `Cow::Borrowed("privesc")` from the detector crate's literals — both
+//! cloning into the BTreeMap key and looking up an existing key are
+//! pointer-copy cheap, so the hot path stays allocation-free. Synthetic
+//! variants (`"privesc.anomaly"`, `"…burst"`) arrive `Cow::Owned`, which
+//! falls back to a single `String` allocation per emit.
+
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::sync::Mutex;
 use std::sync::OnceLock;
@@ -18,18 +23,20 @@ use kernelradar_core::event::Severity;
 
 use crate::dedup::drain_suppressed;
 
+type Det = Cow<'static, str>;
+
 #[derive(Default)]
 struct Counters {
     /// (detector, severity) → count since last summary
-    bucket_emitted: BTreeMap<(&'static str, Severity), u64>,
+    bucket_emitted: BTreeMap<(Det, Severity), u64>,
     /// (detector, severity) → cumulative since process start
-    total_emitted: BTreeMap<(&'static str, Severity), u64>,
+    total_emitted: BTreeMap<(Det, Severity), u64>,
     /// (detector, severity) → suppressed since last summary
-    bucket_suppressed: BTreeMap<(&'static str, Severity), u64>,
+    bucket_suppressed: BTreeMap<(Det, Severity), u64>,
     /// (detector) → burst count cumulative
-    total_bursts: BTreeMap<&'static str, u64>,
+    total_bursts: BTreeMap<Det, u64>,
     /// (detector) → anomaly count cumulative
-    total_anomalies: BTreeMap<&'static str, u64>,
+    total_anomalies: BTreeMap<Det, u64>,
 }
 
 static COUNTERS: OnceLock<Mutex<Counters>> = OnceLock::new();
@@ -38,28 +45,34 @@ fn counters() -> &'static Mutex<Counters> {
     COUNTERS.get_or_init(|| Mutex::new(Counters::default()))
 }
 
-pub fn record_alert(detector: &'static str, severity: Severity) {
+pub fn record_alert(detector: &Det, severity: Severity) {
     if let Ok(mut c) = counters().lock() {
-        *c.bucket_emitted.entry((detector, severity)).or_insert(0) += 1;
-        *c.total_emitted.entry((detector, severity)).or_insert(0) += 1;
+        *c.bucket_emitted
+            .entry((detector.clone(), severity))
+            .or_insert(0) += 1;
+        *c.total_emitted
+            .entry((detector.clone(), severity))
+            .or_insert(0) += 1;
     }
 }
 
-pub fn record_suppressed(detector: &'static str, severity: Severity) {
+pub fn record_suppressed(detector: &Det, severity: Severity) {
     if let Ok(mut c) = counters().lock() {
-        *c.bucket_suppressed.entry((detector, severity)).or_insert(0) += 1;
+        *c.bucket_suppressed
+            .entry((detector.clone(), severity))
+            .or_insert(0) += 1;
     }
 }
 
-pub fn record_burst(detector: &'static str) {
+pub fn record_burst(detector: &Det) {
     if let Ok(mut c) = counters().lock() {
-        *c.total_bursts.entry(detector).or_insert(0) += 1;
+        *c.total_bursts.entry(detector.clone()).or_insert(0) += 1;
     }
 }
 
-pub fn record_anomaly(detector: &'static str) {
+pub fn record_anomaly(detector: &Det) {
     if let Ok(mut c) = counters().lock() {
-        *c.total_anomalies.entry(detector).or_insert(0) += 1;
+        *c.total_anomalies.entry(detector.clone()).or_insert(0) += 1;
     }
 }
 
@@ -126,21 +139,21 @@ fn emit_summary() {
 }
 
 /// Cumulative totals + bursts for `kernelradar status`.
-pub fn cumulative_totals() -> BTreeMap<(&'static str, Severity), u64> {
+pub fn cumulative_totals() -> BTreeMap<(Det, Severity), u64> {
     counters()
         .lock()
         .map(|c| c.total_emitted.clone())
         .unwrap_or_default()
 }
 
-pub fn cumulative_bursts() -> BTreeMap<&'static str, u64> {
+pub fn cumulative_bursts() -> BTreeMap<Det, u64> {
     counters()
         .lock()
         .map(|c| c.total_bursts.clone())
         .unwrap_or_default()
 }
 
-pub fn cumulative_anomalies() -> BTreeMap<&'static str, u64> {
+pub fn cumulative_anomalies() -> BTreeMap<Det, u64> {
     counters()
         .lock()
         .map(|c| c.total_anomalies.clone())

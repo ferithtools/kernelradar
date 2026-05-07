@@ -4,29 +4,31 @@
 // Part of the kernelradar project — Linux kernel anomaly detection via BPF.
 // See LICENSE for terms.
 
-/// Rate-limiting + burst detection + exponential backoff.
-///
-/// Single in-memory state shared across all detectors. The decision is
-/// made for every alert before it is emitted by `print_alert`.
-///
-/// Key = (detector, comm, event_type) — the same source firing the
-/// same kind of alert. Rapid repetition is suppressed; persistent
-/// repetition triggers exponential backoff; absolute floods raise a
-/// secondary BURST alert.
-///
-/// Threading: a single Mutex protects the whole state map. Lock is
-/// only held for ~microseconds per alert.
+//! Rate-limiting + burst detection + exponential backoff.
+//!
+//! Single in-memory state shared across all detectors. The decision is
+//! made for every alert before it is emitted by `print_alert`.
+//!
+//! Key = (detector, comm, event_type) — the same source firing the
+//! same kind of alert. Rapid repetition is suppressed; persistent
+//! repetition triggers exponential backoff; absolute floods raise a
+//! secondary BURST alert.
+//!
+//! Threading: a single Mutex protects the whole state map. Lock is
+//! only held for ~microseconds per alert.
+
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 use kernelradar_core::event::Severity;
 
-/// (detector, comm, event_type). The detector half is `&'static str`
-/// because every caller passes a string literal — the rate-limiter
-/// inserts ~one event/sec under load, so saving a `String` allocation
-/// per check matters.
-type Key = (&'static str, String, u16);
+/// (detector, comm, event_type). The detector half is `Cow<'static, str>`
+/// because regular alerts arrive `Cow::Borrowed("privesc")` from the
+/// detector crate's literals (no allocation), while synthetic anomaly /
+/// burst markers carry an owned formatted name.
+pub type Key = (Cow<'static, str>, String, u16);
 
 #[derive(Debug, Clone, Copy)]
 pub struct RateLimitConfig {
@@ -225,9 +227,14 @@ pub fn init(config: RateLimitConfig) {
 }
 
 /// Make a decision for an alert.
-pub fn check(detector: &'static str, comm: &str, event_type: u16, severity: Severity) -> Decision {
+pub fn check(
+    detector: &Cow<'static, str>,
+    comm: &str,
+    event_type: u16,
+    severity: Severity,
+) -> Decision {
     let mut rl = lock();
-    rl.check((detector, comm.to_string(), event_type), severity)
+    rl.check((detector.clone(), comm.to_string(), event_type), severity)
 }
 
 /// Drain suppressed counters since last drain.

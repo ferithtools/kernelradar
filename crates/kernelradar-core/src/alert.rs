@@ -7,6 +7,7 @@
 use crate::event::Severity;
 use chrono::{DateTime, Utc};
 use serde::Serialize;
+use std::borrow::Cow;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize)]
@@ -17,10 +18,11 @@ pub struct Alert {
     pub correlation_id: Uuid,
     pub timestamp: DateTime<Utc>,
     pub severity: Severity,
-    /// Detector identifier; always a string literal from the detector
-    /// crate, so `&'static str` lets the entire alert pipeline avoid the
-    /// per-event String allocation that "privesc".to_string() would cost.
-    pub detector: &'static str,
+    /// Detector identifier. Almost always a string literal from the
+    /// detector crate (`Cow::Borrowed("privesc")`); synthetic variants
+    /// like `"privesc.anomaly"` arrive as owned strings, so `Cow` lets
+    /// the hot path stay allocation-free without losing flexibility.
+    pub detector: Cow<'static, str>,
     /// Detector-specific event subtype (mirrors `KrEvent::event_type`).
     /// Used by the rate-limiter as part of the dedup key.
     pub event_type: u16,

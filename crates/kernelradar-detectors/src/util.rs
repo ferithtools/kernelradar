@@ -129,7 +129,7 @@ pub fn make_alert(
         correlation_id: Uuid::now_v7(),
         timestamp: Utc::now(),
         severity: sev,
-        detector,
+        detector: std::borrow::Cow::Borrowed(detector),
         event_type: ev.event_type,
         title: title.to_string(),
         description: exe.map(|e| format!("exe={e}")).unwrap_or_default(),
@@ -150,11 +150,11 @@ pub fn make_alert(
 pub fn print_alert(alert: &Alert, _legacy_json: bool) {
     // Update baseline + score regardless of rate limit decision.
     // Suppressed events still feed the model — that IS the model.
-    let z = baseline_score(alert.detector, &alert.comm);
+    let z = baseline_score(&alert.detector, &alert.comm);
 
     // Rate limit / burst / backoff
     let decision = rate_check(
-        alert.detector,
+        &alert.detector,
         &alert.comm,
         alert.event_type,
         alert.severity,
@@ -162,30 +162,30 @@ pub fn print_alert(alert: &Alert, _legacy_json: bool) {
 
     match decision {
         Decision::Suppress => {
-            record_suppressed(alert.detector, alert.severity);
+            record_suppressed(&alert.detector, alert.severity);
             // Anomaly side-channel: even rate-limited events that are
             // statistically anomalous deserve a one-off ANOMALY alert.
             if let Some(score) = z {
                 emit_anomaly_marker(alert, score);
-                record_anomaly(alert.detector);
+                record_anomaly(&alert.detector);
             }
         }
         Decision::Allow => {
-            record_alert(alert.detector, alert.severity);
+            record_alert(&alert.detector, alert.severity);
             emit(alert);
             if let Some(score) = z {
                 emit_anomaly_marker(alert, score);
-                record_anomaly(alert.detector);
+                record_anomaly(&alert.detector);
             }
         }
         Decision::Burst => {
-            record_alert(alert.detector, alert.severity);
-            record_burst(alert.detector);
+            record_alert(&alert.detector, alert.severity);
+            record_burst(&alert.detector);
             emit(alert);
             emit_burst_marker(alert);
             if let Some(score) = z {
                 emit_anomaly_marker(alert, score);
-                record_anomaly(alert.detector);
+                record_anomaly(&alert.detector);
             }
         }
     }
@@ -214,7 +214,7 @@ fn emit_anomaly_marker(orig: &Alert, z: f64) {
         correlation_id: orig.correlation_id,
         timestamp: Utc::now(),
         severity: kernelradar_core::event::Severity::Alert,
-        detector: format!("{}.anomaly", orig.detector),
+        detector: std::borrow::Cow::Owned(format!("{}.anomaly", orig.detector)),
         event_type: orig.event_type,
         title: format!(
             "ANOMALY: {} {} by {} — z={:.1}σ",
@@ -241,7 +241,7 @@ fn emit_burst_marker(orig: &Alert) {
         correlation_id: orig.correlation_id,
         timestamp: Utc::now(),
         severity: kernelradar_core::event::Severity::Critical,
-        detector: format!("{}.burst", orig.detector),
+        detector: std::borrow::Cow::Owned(format!("{}.burst", orig.detector)),
         event_type: orig.event_type,
         title: format!(
             "BURST: {} {} fired ≥ threshold per second by {}",
@@ -288,7 +288,7 @@ fn emit_journald(alert: &Alert) {
     };
 
     let comm = alert.comm.as_str();
-    let detector = alert.detector;
+    let detector: &str = &alert.detector;
     let title = alert.title.as_str();
     let description = alert.description.as_str();
     let severity = format!("{}", alert.severity);
