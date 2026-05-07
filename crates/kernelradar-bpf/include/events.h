@@ -19,6 +19,7 @@
 #define KR_DETECTOR_NETWORK     6
 #define KR_DETECTOR_INJECTION   7
 #define KR_DETECTOR_CRED        8
+#define KR_DETECTOR_SELFPROTECT 9   /* LSM denial of a kill aimed at us */
 
 #define KR_SEV_INFO     0
 #define KR_SEV_WARNING  1
@@ -55,6 +56,10 @@
 
 #define KR_CRED_READ            1   /* read open of credential file */
 
+/* ── Self-protect event types ───────────────────────────────────────── */
+
+#define KR_SP_KILL_DENIED       1   /* lsm/task_kill returned -EPERM */
+
 /* ── Stats counter slots ───────────────────────────────────────────── */
 /* All BPF programs share one BPF_MAP_TYPE_ARRAY of __u64 with these
  * indices. Userspace reads them periodically for Prometheus metrics. */
@@ -75,8 +80,10 @@
 #define KR_STAT_INJECTION_DROPPED  13
 #define KR_STAT_CRED_OBSERVED      14
 #define KR_STAT_CRED_DROPPED       15
+#define KR_STAT_SELFPROTECT_DENIED 16
+#define KR_STAT_SELFPROTECT_DROPPED 17
 
-#define KR_STAT_SLOTS              16
+#define KR_STAT_SLOTS              18
 
 /* ── Common event struct (must match Rust KrEvent) ───────────────────── */
 

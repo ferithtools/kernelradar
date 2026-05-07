@@ -35,6 +35,7 @@ pub enum DetectorId {
     Network = 6,
     Injection = 7,
     Cred = 8,
+    SelfProtect = 9,
 }
 
 #[repr(u8)]
@@ -83,7 +84,7 @@ mod tests {
         assert!(Severity::Warning > Severity::Info);
     }
 
-    /// DetectorId values match the BPF KR_DETECTOR_* defines (1..=8).
+    /// DetectorId values match the BPF KR_DETECTOR_* defines (1..=9).
     #[test]
     fn detector_id_numeric_values() {
         assert_eq!(DetectorId::PrivEsc as u8, 1);
@@ -94,6 +95,7 @@ mod tests {
         assert_eq!(DetectorId::Network as u8, 6);
         assert_eq!(DetectorId::Injection as u8, 7);
         assert_eq!(DetectorId::Cred as u8, 8);
+        assert_eq!(DetectorId::SelfProtect as u8, 9);
     }
 
     /// Fuzz: arbitrary bytes coming out of a BPF ring buffer must never

@@ -16,12 +16,14 @@
 /// in observe-only mode - never abort the daemon.
 use anyhow::{Context, Result};
 use aya::{
-    maps::{Array, HashMap, MapData},
+    maps::{Array, HashMap, MapData, RingBuf},
     programs::Lsm,
     Btf, Ebpf,
 };
+use std::os::fd::AsRawFd;
 use std::path::Path;
 use std::sync::OnceLock;
+use tokio::io::unix::AsyncFd;
 
 use crate::integrity::verify as verify_bpf;
 
@@ -168,7 +170,92 @@ fn load_selfprotect(path: &str, btf: &Btf) -> Result<Ebpf> {
     let mut arr: Array<MapData, u32> = Array::try_from(map)?;
     arr.set(0, tgid, 0)?;
 
+    // Take ownership of the denial-event ring buffer and spawn the
+    // userspace reader. The reader emits a CRITICAL alert per denied
+    // kill so an attempt to silence the daemon shows up in journald,
+    // Prometheus, and any wired-up webhook. Without this every block
+    // would be invisible (KR-03 in the redteam audit).
+    let events = bpf
+        .take_map("kr_selfprotect_events")
+        .context("kr_selfprotect_events map missing")?;
+    let ring: RingBuf<MapData> = RingBuf::try_from(events)?;
+    spawn_selfprotect_reader(ring);
+
     Ok(bpf)
+}
+
+/// Drive the self-protect ring buffer. Each entry becomes a
+/// CRITICAL alert with detector="selfprotect" so the rest of the
+/// alert pipeline (rate limit, output channels, webhook, Prometheus)
+/// treats it like any other event.
+fn spawn_selfprotect_reader(ring: RingBuf<MapData>) {
+    use kernelradar_core::event::KrEvent;
+    tokio::spawn(async move {
+        let mut async_ring =
+            match AsyncFd::with_interest(SelfprotectRing(ring), tokio::io::Interest::READABLE) {
+                Ok(a) => a,
+                Err(e) => {
+                    tracing::error!(error = %e,
+                    "selfprotect: failed to register ring buffer with reactor");
+                    return;
+                }
+            };
+        loop {
+            tokio::select! {
+                _ = tokio::signal::ctrl_c() => break,
+                ready = async_ring.readable_mut() => {
+                    let mut guard = match ready {
+                        Ok(g) => g,
+                        Err(e) => {
+                            tracing::error!(error = %e,
+                                "selfprotect: ring buffer readable() error");
+                            break;
+                        }
+                    };
+                    let SelfprotectRing(ring) = guard.get_inner_mut();
+                    while let Some(item) = ring.next() {
+                        if item.len() < std::mem::size_of::<KrEvent>() {
+                            continue;
+                        }
+                        let ev: KrEvent = unsafe {
+                            std::ptr::read_unaligned(item.as_ptr() as *const KrEvent)
+                        };
+                        emit_selfprotect_alert(&ev);
+                    }
+                    guard.clear_ready();
+                }
+            }
+        }
+    });
+}
+
+fn emit_selfprotect_alert(ev: &kernelradar_core::event::KrEvent) {
+    use crate::util::{comm_str, make_alert, print_alert, read_exe_path};
+    let comm = comm_str(ev);
+    let exe = read_exe_path(ev.pid);
+    let signal = ev.data[0] as i32;
+    let target = ev.data[1] as u32;
+    let title =
+        format!("selfprotect: BLOCKED kill(sig={signal}) of kernelradar tgid={target} by {comm}");
+    let ctx = serde_json::json!({
+        "blocked_signal":   signal,
+        "target_tgid":      target,
+        "sender_comm":      comm,
+        "sender_exe":       exe,
+    });
+    let alert = make_alert(ev, exe.as_deref(), "selfprotect", &title, ctx);
+    print_alert(&alert, false);
+}
+
+/// Newtype around `aya::maps::RingBuf` that delegates `AsRawFd`,
+/// mirroring the helper in `runtime.rs`. Lets `tokio::io::unix::AsyncFd`
+/// take ownership and reach the underlying fd unambiguously.
+struct SelfprotectRing(RingBuf<MapData>);
+
+impl AsRawFd for SelfprotectRing {
+    fn as_raw_fd(&self) -> std::os::fd::RawFd {
+        self.0.as_raw_fd()
+    }
 }
 
 fn load_bpf_enforce(path: &str, btf: &Btf, allowlist: &[String]) -> Result<Ebpf> {
