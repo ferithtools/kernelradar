@@ -25,11 +25,18 @@ AmbientCapabilities=CAP_BPF CAP_PERFMON CAP_SYS_RESOURCE CAP_SYS_ADMIN
 CapabilityBoundingSet=CAP_BPF CAP_PERFMON CAP_SYS_RESOURCE CAP_SYS_ADMIN
 NoNewPrivileges=false
 
-# Filesystem hardening: read-only except journald + own state
+# Filesystem hardening: read-only except journald + own state.
+# BPF objects under /var/lib/kernelradar/bpf are bind-mounted
+# read-only inside the unit's namespace - even if an attacker with
+# local root writes to /var/lib/kernelradar/bpf on the real FS, the
+# daemon process itself sees the directory as read-only and refuses
+# to write. baseline.json and other dynamic state live in
+# /var/lib/kernelradar/state, which is the only writable path.
 ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
-ReadWritePaths=/var/lib/kernelradar /run/kernelradar
+ReadWritePaths=/var/lib/kernelradar/state /run/kernelradar
+BindReadOnlyPaths=/var/lib/kernelradar/bpf
 StateDirectory=kernelradar
 RuntimeDirectory=kernelradar
 

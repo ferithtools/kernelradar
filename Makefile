@@ -40,9 +40,14 @@ clean:
 	$(MAKE) -C $(BPF_DIR) clean
 
 # ── Install ──────────────────────────────────────────────────────────
-# Layout:
+# Layout (separation of read-only BPF objects from writable runtime
+# state - the systemd unit bind-mounts bpf/ read-only inside the
+# unit's namespace, so an attacker with local root who writes to
+# /var/lib/kernelradar/bpf on the real FS still cannot reach the
+# daemon's view of those files):
 #   /usr/local/bin/kernelradar
-#   /var/lib/kernelradar/bpf/{privesc,bpf_loader,container,kmod}.bpf.o
+#   /var/lib/kernelradar/bpf/*.bpf.o          (root:root 0644, RO at runtime)
+#   /var/lib/kernelradar/state/               (root:root 0750, RW; baseline.json)
 #   /etc/systemd/system/kernelradar.service
 install:
 	@if [ ! -f $(BIN) ]; then \
@@ -56,8 +61,9 @@ install:
 	@echo "Installing kernelradar to $(PREFIX)..."
 	$(INSTALL) -d $(DESTDIR)$(BINDIR)
 	$(INSTALL) -m 0755 $(BIN) $(DESTDIR)$(BINDIR)/kernelradar
-	$(INSTALL) -d $(DESTDIR)$(LIBDIR)/bpf
+	$(INSTALL) -d -m 0755 $(DESTDIR)$(LIBDIR)/bpf
 	$(INSTALL) -m 0644 $(BPF_DIR)/.output/*.bpf.o          $(DESTDIR)$(LIBDIR)/bpf/
+	$(INSTALL) -d -m 0750 $(DESTDIR)$(LIBDIR)/state
 	$(INSTALL) -d $(DESTDIR)$(SYSTEMDDIR)
 	$(INSTALL) -m 0644 contrib/systemd/kernelradar.service $(DESTDIR)$(SYSTEMDDIR)/
 	@echo
@@ -123,8 +129,9 @@ release-tarball: all
 	  "HERE=\"\$$(cd \"\$$(dirname \"\$${BASH_SOURCE[0]}\")\" && pwd)\"" \
 	  "PREFIX=\"\$${PREFIX:-/usr/local}\"" \
 	  "sudo install -m 0755 -D \"\$$HERE/bin/kernelradar\"          \"\$$PREFIX/bin/kernelradar\"" \
-	  "sudo install -d /var/lib/kernelradar/bpf" \
+	  "sudo install -d -m 0755 /var/lib/kernelradar/bpf" \
 	  "sudo install -m 0644 \"\$$HERE\"/lib/kernelradar/bpf/*.bpf.o /var/lib/kernelradar/bpf/" \
+	  "sudo install -d -m 0750 /var/lib/kernelradar/state" \
 	  "sudo install -m 0644 \"\$$HERE/share/systemd/kernelradar.service\" /etc/systemd/system/" \
 	  "sudo install -d /etc/kernelradar" \
 	  "[ -e /etc/kernelradar/config.toml ] || sudo cp \"\$$HERE/share/kernelradar/config.toml.example\" /etc/kernelradar/config.toml" \

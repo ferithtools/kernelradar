@@ -179,7 +179,7 @@ impl Default for BaselineTomlConfig {
             learning_secs: 3600 * 24,
             score_threshold: 3.0,
             alpha: 0.10,
-            save_path: "/var/lib/kernelradar/baseline.json".into(),
+            save_path: "/var/lib/kernelradar/state/baseline.json".into(),
             save_interval_secs: 300,
             pairs_max: 10_000,
             evict_age_hours: 24 * 7,

@@ -75,7 +75,7 @@ impl Default for BaselineConfig {
             learning_secs: 3600 * 24, // 24 hours warm-up
             score_threshold: 3.0,     // 3σ
             alpha: 0.10,
-            save_path: "/var/lib/kernelradar/baseline.json".into(),
+            save_path: "/var/lib/kernelradar/state/baseline.json".into(),
             save_interval_secs: 300, // every 5 minutes
             pairs_max: 10_000,
             evict_age_hours: 24 * 7, // 7 days
