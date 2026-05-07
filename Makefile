@@ -15,7 +15,8 @@ BIN      := target/release/kernelradar
 
 .PHONY: all bpf rust check clean install uninstall \
         service-start service-stop service-restart \
-        service-status service-logs
+        service-status service-logs \
+        release-tarball
 
 all: bpf rust
 
@@ -91,3 +92,50 @@ service-status:
 
 service-logs:
 	journalctl -t kernelradar -f -o cat
+
+# ── Release tarball ──────────────────────────────────────────────────
+# Produces dist/kernelradar-<version>-linux-x86_64.tar.gz that can be
+# extracted on a target host and installed via the included install.sh.
+# Run this on Linux (BPF objects are Linux-only).
+RELEASE_VERSION := $(shell awk -F'"' \
+    '/^version[[:space:]]*=[[:space:]]*"/{print $$2; exit}' \
+    Cargo.toml 2>/dev/null || echo 0.0.0)
+RELEASE_ARCH    := $(shell uname -m)
+RELEASE_NAME    := kernelradar-$(RELEASE_VERSION)-linux-$(RELEASE_ARCH)
+RELEASE_DIR     := dist/$(RELEASE_NAME)
+
+release-tarball: all
+	@echo "==> packaging $(RELEASE_NAME)"
+	@rm -rf $(RELEASE_DIR) dist/$(RELEASE_NAME).tar.gz dist/$(RELEASE_NAME).tar.gz.sha256
+	@mkdir -p $(RELEASE_DIR)/bin \
+	          $(RELEASE_DIR)/lib/kernelradar/bpf \
+	          $(RELEASE_DIR)/share/systemd \
+	          $(RELEASE_DIR)/share/kernelradar
+	@cp $(BIN)                                          $(RELEASE_DIR)/bin/kernelradar
+	@cp $(BPF_DIR)/.output/*.bpf.o                      $(RELEASE_DIR)/lib/kernelradar/bpf/
+	@cp contrib/systemd/kernelradar.service             $(RELEASE_DIR)/share/systemd/
+	@$(BIN) config-cmd example                        > $(RELEASE_DIR)/share/kernelradar/config.toml.example
+	@cp LICENSE README.md                               $(RELEASE_DIR)/
+	@printf '%s\n' \
+	  "#!/usr/bin/env bash" \
+	  "# kernelradar $(RELEASE_VERSION) installer" \
+	  "set -euo pipefail" \
+	  "HERE=\"\$$(cd \"\$$(dirname \"\$${BASH_SOURCE[0]}\")\" && pwd)\"" \
+	  "PREFIX=\"\$${PREFIX:-/usr/local}\"" \
+	  "sudo install -m 0755 -D \"\$$HERE/bin/kernelradar\"          \"\$$PREFIX/bin/kernelradar\"" \
+	  "sudo install -d /var/lib/kernelradar/bpf" \
+	  "sudo install -m 0644 \"\$$HERE\"/lib/kernelradar/bpf/*.bpf.o /var/lib/kernelradar/bpf/" \
+	  "sudo install -m 0644 \"\$$HERE/share/systemd/kernelradar.service\" /etc/systemd/system/" \
+	  "sudo install -d /etc/kernelradar" \
+	  "[ -e /etc/kernelradar/config.toml ] || sudo cp \"\$$HERE/share/kernelradar/config.toml.example\" /etc/kernelradar/config.toml" \
+	  "sudo systemctl daemon-reload" \
+	  "echo 'Installed. Enable + start:'" \
+	  "echo '  sudo systemctl enable --now kernelradar'" \
+	  > $(RELEASE_DIR)/install.sh
+	@chmod +x $(RELEASE_DIR)/install.sh
+	@( cd $(RELEASE_DIR) && find . -type f ! -name SHA256SUMS \
+	      | LC_ALL=C sort | xargs sha256sum > SHA256SUMS )
+	@( cd dist && tar -czf $(RELEASE_NAME).tar.gz $(RELEASE_NAME) )
+	@sha256sum dist/$(RELEASE_NAME).tar.gz | tee dist/$(RELEASE_NAME).tar.gz.sha256
+	@echo "==> dist/$(RELEASE_NAME).tar.gz ready"
+	@ls -la dist/$(RELEASE_NAME).tar.gz
