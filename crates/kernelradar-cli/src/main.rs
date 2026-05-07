@@ -555,6 +555,11 @@ burst_window_secs = 1
 # Exponential backoff after window cap exceeded (seconds; doubles per recurrence)
 backoff_initial_secs = 60
 backoff_max_secs     = 3600
+# Cap on (detector, comm, event_type) state entries kept in memory.
+# Defends against unbounded growth from a hostile attacker spawning
+# distinct comm names via prctl(PR_SET_NAME). LRU eviction by
+# last_emitted when over cap.
+keys_max = 10000
 
 [baseline]
 # Adaptive anomaly scoring: learn normal rates per (detector, comm, hour-of-day),

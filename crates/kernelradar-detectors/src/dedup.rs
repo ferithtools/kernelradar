@@ -47,6 +47,13 @@ pub struct RateLimitConfig {
     /// time the key keeps firing, capped at `backoff_max`.
     pub backoff_initial: Duration,
     pub backoff_max: Duration,
+
+    /// Maximum number of (detector, comm, event_type) entries kept
+    /// in memory at once. When exceeded, entries with the oldest
+    /// `last_emitted` are dropped first. Defends against an
+    /// attacker who churns through `prctl(PR_SET_NAME)` to spawn
+    /// unbounded distinct keys.
+    pub keys_max: usize,
 }
 
 impl Default for RateLimitConfig {
@@ -58,6 +65,7 @@ impl Default for RateLimitConfig {
             burst_window: Duration::from_secs(1),
             backoff_initial: Duration::from_secs(60),
             backoff_max: Duration::from_secs(3600),
+            keys_max: 10_000,
         }
     }
 }
@@ -126,6 +134,28 @@ impl RateLimiter {
     fn check(&mut self, key: Key, severity: Severity) -> Decision {
         let now = Instant::now();
         let cfg = self.config;
+
+        // Cap the state map. If we are about to insert a brand-new key
+        // and we are already at `keys_max`, evict the entry with the
+        // oldest `last_emitted` first - that's the LRU under the
+        // "alerts that fired recently are more interesting" model.
+        // Linear scan is O(N) but only fires on growth; steady state
+        // pays nothing.
+        if self.state.len() >= cfg.keys_max && !self.state.contains_key(&key) {
+            if let Some(oldest_key) = self
+                .state
+                .iter()
+                .min_by_key(|(_, st)| st.last_emitted)
+                .map(|(k, _)| k.clone())
+            {
+                self.state.remove(&oldest_key);
+                tracing::debug!(
+                    cap = cfg.keys_max,
+                    "rate limiter: evicted stale key to stay under cap"
+                );
+            }
+        }
+
         let entry = self
             .state
             .entry(key)

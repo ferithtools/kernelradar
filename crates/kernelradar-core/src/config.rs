@@ -195,6 +195,12 @@ pub struct RateLimitTomlConfig {
     /// Exponential backoff initial delay
     pub backoff_initial_secs: u64,
     pub backoff_max_secs: u64,
+    /// Cap on (detector, comm, event_type) state entries kept in
+    /// memory. Defends against unbounded growth from a hostile
+    /// attacker churning through `prctl(PR_SET_NAME)` to spawn
+    /// distinct keys. When exceeded the entry with the oldest
+    /// `last_emitted` is evicted. Default 10 000.
+    pub keys_max: usize,
 }
 
 impl Default for RateLimitTomlConfig {
@@ -206,6 +212,7 @@ impl Default for RateLimitTomlConfig {
             burst_window_secs: 1,
             backoff_initial_secs: 60,
             backoff_max_secs: 3600,
+            keys_max: 10_000,
         }
     }
 }

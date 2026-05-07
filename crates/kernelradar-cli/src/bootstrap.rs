@@ -58,6 +58,7 @@ pub fn init_runtime_services(cfg: &Config, is_daemon: bool) {
         burst_window: Duration::from_secs(rl.burst_window_secs),
         backoff_initial: Duration::from_secs(rl.backoff_initial_secs),
         backoff_max: Duration::from_secs(rl.backoff_max_secs),
+        keys_max: rl.keys_max,
     });
 
     if cfg.baseline.enabled {
