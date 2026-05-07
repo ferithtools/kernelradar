@@ -39,14 +39,21 @@ pub struct Config {
     pub detectors: BTreeMap<String, DetectorConfig>,
 }
 
-/// BPF integrity check. When `strict_mode = true`, a hash mismatch
-/// refuses to load the affected detector instead of just warning.
-/// Default `false` keeps the friendly "warn but continue" behaviour
-/// for first-time installs.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+/// BPF integrity check. When `strict_mode = true` (default), a hash
+/// mismatch or a missing build-time hash refuses to load the affected
+/// detector. Operators rebuilding `.bpf.o` files in place can flip
+/// this off temporarily, but shipped binaries must run strict to keep
+/// supply-chain tampering visible.
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct IntegrityTomlConfig {
     pub strict_mode: bool,
+}
+
+impl Default for IntegrityTomlConfig {
+    fn default() -> Self {
+        Self { strict_mode: true }
+    }
 }
 
 /// Network-detector tunables. Currently a destination CIDR allowlist -

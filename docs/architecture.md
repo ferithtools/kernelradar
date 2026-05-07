@@ -188,12 +188,14 @@ re-hashes the file on disk before `Ebpf::load` and compares.
 
 Two modes:
 
-- **Default**: mismatch logs a loud `error!` and the daemon
-  continues. Friendly when an admin rebuilt only some `.bpf.o`
-  files.
-- **Strict** (`[integrity] strict_mode = true`): mismatch refuses to
-  load that detector. Use this when shipping pre-built `.bpf.o`
-  alongside the binary and you want hard drift detection.
+- **Strict** (default, `[integrity] strict_mode = true`): a hash
+  mismatch OR a missing build-time hash (e.g. the `.bpf.o` was
+  absent during `cargo build`) refuses to load that detector. This
+  is the only safe setting for binaries an operator did not just
+  build themselves.
+- **Permissive** (`strict_mode = false`): mismatch logs a loud
+  `error!` and the daemon continues. Useful while iterating on
+  `.bpf.o` files after install. Flip strict back on before shipping.
 
 ## Threading model
 
@@ -259,7 +261,7 @@ bpf_allowlist        = ["bpftrace", "falco", "kernelradar"]
 kmod_allowlist       = ["modprobe", "kmod", "insmod", "systemd-udevd"]
 
 [integrity]
-strict_mode = false                 # true = refuse to load on hash mismatch
+strict_mode = true                  # default; false only while iterating on .bpf.o locally
 
 [network]
 destination_cidr_allowlist = []     # IPv4 CIDRs to suppress before alerting

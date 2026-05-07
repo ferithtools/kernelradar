@@ -25,7 +25,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 include!(concat!(env!("OUT_DIR"), "/bpf_hashes.rs"));
 
 /// Global strict-mode flag, set once from config at daemon startup.
-static STRICT_MODE: AtomicBool = AtomicBool::new(false);
+/// Default is strict: an empty hash table or a hash mismatch refuses
+/// the load. Operators rebuilding `.bpf.o` files in place can flip
+/// this off via `[integrity] strict_mode = false`.
+static STRICT_MODE: AtomicBool = AtomicBool::new(true);
 
 /// Switch to strict mode. After this call, any `verify()` mismatch
 /// returns Err instead of just logging.

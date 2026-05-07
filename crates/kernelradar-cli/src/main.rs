@@ -594,16 +594,17 @@ kmod_allowlist       = ["modprobe", "kmod", "insmod", "systemd-udevd"]
 # BPF object SHA-256 verification. Build-time hashes are embedded into
 # the binary; at load time the bytes on disk are re-hashed.
 #
-#   strict_mode = false  (default)  - mismatch logs an error, daemon
-#                                     keeps loading. Friendly for ad-hoc
-#                                     `cd crates/kernelradar-bpf && make`
-#                                     after install.
-#   strict_mode = true              - mismatch refuses to load. Use this
-#                                     in production when you ship the
-#                                     prebuilt .bpf.o files alongside
-#                                     the binary and want strict drift
-#                                     detection.
-strict_mode = false
+#   strict_mode = true   (default)  - mismatch OR missing build-time
+#                                     hash refuses to load that detector.
+#                                     This is the right setting for any
+#                                     binary you did not just rebuild
+#                                     yourself.
+#   strict_mode = false             - mismatch logs an error and the
+#                                     daemon keeps loading. Useful when
+#                                     iterating on `.bpf.o` after
+#                                     install; flip back to true before
+#                                     shipping.
+strict_mode = true
 
 [network]
 # Destination CIDR allowlist. connect() to addresses inside any of
