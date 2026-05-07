@@ -4,7 +4,7 @@
 // Part of the kernelradar project — Linux kernel anomaly detection via BPF.
 // See LICENSE for terms.
 
-/// LSM enforcement & self-protection (T-0.9 + T-6.4).
+/// LSM enforcement and self-protection.
 ///
 /// Loads BPF LSM programs that DENY operations:
 ///   • selfprotect.bpf.o      — block kill of kernelradar itself
@@ -35,7 +35,7 @@ pub struct EnforcementConfig {
     pub bpf_enforce_obj_path: String,
     pub kmod_enforce_obj_path: String,
 
-    /// Comm strings allowed to load BPF programs (T-0.9 enforcement).
+    /// Comm strings allowed to load BPF programs.
     pub bpf_allowlist: Vec<String>,
     /// Comm strings allowed to load kernel modules.
     pub kmod_allowlist: Vec<String>,
@@ -92,12 +92,12 @@ pub fn install(cfg: &EnforcementConfig) {
         match load_selfprotect(&cfg.selfprotect_obj_path, &btf) {
             Ok(b) => {
                 tracing::warn!(
-                    "T-6.4 self-protection ENABLED: \
+                    "self-protection ENABLED: \
                                  kernelradar PID is unkillable except by systemd"
                 );
                 state._selfprotect = Some(b);
             }
-            Err(e) => tracing::error!("T-6.4: failed to load selfprotect: {e}"),
+            Err(e) => tracing::error!("failed to load selfprotect: {e}"),
         }
     }
 
@@ -105,12 +105,12 @@ pub fn install(cfg: &EnforcementConfig) {
         match load_bpf_enforce(&cfg.bpf_enforce_obj_path, &btf, &cfg.bpf_allowlist) {
             Ok(b) => {
                 tracing::warn!(
-                    "T-0.9 bpf-loader ENFORCEMENT ENABLED: \
+                    "bpf-loader ENFORCEMENT ENABLED: \
                                  BPF_PROG_LOAD denied for non-allowlisted procs"
                 );
                 state._bpf_enforce = Some(b);
             }
-            Err(e) => tracing::error!("T-0.9: failed to load enforce_bpf: {e}"),
+            Err(e) => tracing::error!("failed to load enforce_bpf: {e}"),
         }
     }
 
@@ -118,17 +118,17 @@ pub fn install(cfg: &EnforcementConfig) {
         match load_kmod_enforce(&cfg.kmod_enforce_obj_path, &btf, &cfg.kmod_allowlist) {
             Ok(b) => {
                 tracing::warn!(
-                    "T-0.9 kmod ENFORCEMENT ENABLED: \
+                    "kmod ENFORCEMENT ENABLED: \
                                  kernel_read_file(MODULE) denied for non-allowlisted"
                 );
                 state._kmod_enforce = Some(b);
             }
-            Err(e) => tracing::error!("T-0.9: failed to load enforce_kmod: {e}"),
+            Err(e) => tracing::error!("failed to load enforce_kmod: {e}"),
         }
     }
 
     let cell = LOADED.get_or_init(|| std::sync::Mutex::new(None));
-    // M-8: poisoned mutex → log + recover. install() runs once at startup,
+    // Poisoned mutex → log and recover. install() runs once at startup,
     // so poisoning is unlikely; fall back to overwriting the inner state.
     let mut guard = cell.lock().unwrap_or_else(|e| {
         tracing::warn!("LSM state mutex was poisoned; recovering");
@@ -144,8 +144,8 @@ pub fn install(cfg: &EnforcementConfig) {
 fn load_lsm(path: &str, btf: &Btf, detector: &str, prog_name: &'static str) -> Result<Ebpf> {
     let bytes = std::fs::read(Path::new(path)).with_context(|| format!("read {path}"))?;
 
-    // H-2: LSM is the last line of defense. Integrity-check the BPF
-    // object before loading — same policy as the observation detectors.
+    // LSM is the last line of defense. Integrity-check the BPF object
+    // before loading — same policy as the observation detectors.
     verify_bpf(detector, &bytes)?;
 
     let mut bpf = Ebpf::load(&bytes).context("verifier rejected LSM program")?;

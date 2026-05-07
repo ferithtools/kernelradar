@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Copyright (C) 2026 Ferith Tools
 //
-// kernelradar — bpf-loader enforcement (T-0.9)
+// kernelradar — bpf-loader enforcement
 //
 // LSM hook on `bpf` that DENIES BPF_PROG_LOAD when the calling
 // process's `comm` is not in our allowlist map.

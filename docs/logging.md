@@ -95,7 +95,7 @@ kernelradar status
 
 ---
 
-## Per-detector log levels (T-1.6)
+## Per-detector log levels
 
 `RUST_LOG` is the standard mechanism. kernelradar honours it via the
 `tracing-subscriber` `EnvFilter`.
@@ -121,7 +121,7 @@ Environment=RUST_LOG=kernelradar=info,kernelradar.alert=info
 
 ---
 
-## Hourly summary (T-1.7)
+## Hourly summary
 
 When running in daemon mode, kernelradar emits a summary every hour
 into the `kernelradar.summary` target:
@@ -134,7 +134,7 @@ Suppress with `RUST_LOG=...,kernelradar.summary=off`.
 
 ---
 
-## Log rotation (T-1.8)
+## Log rotation
 
 ### journald (recommended)
 
@@ -172,7 +172,7 @@ open, so renaming would orphan it. `copytruncate` truncates in place.
 
 ---
 
-## Correlation IDs (T-1.5)
+## Correlation IDs
 
 Every alert carries a UUID v7 `correlation_id`:
 

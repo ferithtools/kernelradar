@@ -4,7 +4,7 @@
 // Part of the kernelradar project — Linux kernel anomaly detection via BPF.
 // See LICENSE for terms.
 
-/// Rate-limiting + burst detection + exponential backoff (T-3).
+/// Rate-limiting + burst detection + exponential backoff.
 ///
 /// Single in-memory state shared across all detectors. The decision is
 /// made for every alert before it is emitted by `print_alert`.
@@ -205,7 +205,7 @@ impl RateLimiter {
 static GLOBAL: OnceLock<Mutex<RateLimiter>> = OnceLock::new();
 
 fn lock() -> std::sync::MutexGuard<'static, RateLimiter> {
-    // M-8: poisoned mutex → log + recover. Suppression decisions are
+    // Poisoned mutex → log and recover. Suppression decisions are
     // best-effort; a missed dedup is preferable to a crashed daemon.
     GLOBAL
         .get_or_init(|| Mutex::new(RateLimiter::new(RateLimitConfig::default())))

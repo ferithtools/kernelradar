@@ -4,7 +4,7 @@
 // Part of the kernelradar project — Linux kernel anomaly detection via BPF.
 // See LICENSE for terms.
 
-/// Global output format selection (T-1.4 + T-5.6).
+/// Global output format selection.
 ///
 /// • Plain    — colored human text on stdout (interactive use)
 /// • Json     — one JSON object per line (kernelradar native schema)

@@ -4,7 +4,7 @@
 // Part of the kernelradar project — Linux kernel anomaly detection via BPF.
 // See LICENSE for terms.
 
-/// Alert counters + hourly summary (T-1.7 + T-3.2).
+/// Alert counters and hourly summary.
 use std::collections::BTreeMap;
 use std::sync::Mutex;
 use std::sync::OnceLock;
@@ -24,7 +24,7 @@ struct Counters {
     bucket_suppressed: BTreeMap<(String, Severity), u64>,
     /// (detector) → burst count cumulative
     total_bursts: BTreeMap<String, u64>,
-    /// (detector) → anomaly count cumulative (T-4)
+    /// (detector) → anomaly count cumulative
     total_anomalies: BTreeMap<String, u64>,
 }
 
@@ -74,7 +74,7 @@ pub fn spawn_hourly_summary() {
 }
 
 fn emit_summary() {
-    // Drain emitted bucket. M-8: poisoned mutex → recover instead of panic.
+    // Drain emitted bucket. Poisoned mutex → recover instead of panic.
     let (emitted, suppressed_internal) = {
         let mut c = counters().lock().unwrap_or_else(|e| e.into_inner());
         let emitted = std::mem::take(&mut c.bucket_emitted);

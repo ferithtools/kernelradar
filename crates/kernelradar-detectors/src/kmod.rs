@@ -35,7 +35,7 @@ impl KmodDetector {
         verify_bpf("kmod", &bytes)?;
         let mut bpf = Ebpf::load(&bytes).context("verifier rejected kmod BPF")?;
 
-        // H-3: pin kr_stats for external tooling.
+        // Pin kr_stats for external tooling.
         if let Some(stats) = bpf.map_mut("kr_stats") {
             let _ = stats.pin("/sys/fs/bpf/kr_stats_kmod");
         }

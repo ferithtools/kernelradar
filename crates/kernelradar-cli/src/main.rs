@@ -111,7 +111,7 @@ enum Commands {
     #[command(subcommand)]
     ConfigCmd(ConfigSub),
 
-    /// Adaptive baseline management (T-4)
+    /// Adaptive baseline management
     #[command(subcommand)]
     Baseline(BaselineSub),
 }
@@ -212,14 +212,14 @@ async fn main() -> Result<()> {
         }
     }
 
-    // H-1: switch BPF integrity check to strict-fail mode if configured.
+    // Switch BPF integrity check to strict-fail mode if configured.
     // Must happen before any detector calls verify_bpf().
     kernelradar_detectors::integrity::set_strict_mode(cfg.integrity.strict_mode);
     if cfg.integrity.strict_mode {
         tracing::info!("BPF integrity check: strict mode ON — mismatch refuses to load");
     }
 
-    // Initialise webhook (T-5.3)
+    // Initialise webhook
     init_webhook(WebhookConfig {
         enabled: cfg.webhook.enabled,
         url: cfg.webhook.url.clone(),
@@ -228,7 +228,7 @@ async fn main() -> Result<()> {
         severity_filter_alert_or_higher: cfg.webhook.severity_filter_alert_or_higher,
     });
 
-    // Initialise Prometheus (T-5.4)
+    // Initialise Prometheus
     init_prometheus(PromConfig {
         enabled: cfg.prometheus.enabled,
         listen_addr: cfg.prometheus.listen_addr.clone(),
@@ -245,7 +245,7 @@ async fn main() -> Result<()> {
         backoff_max: Duration::from_secs(rl_cfg.backoff_max_secs),
     });
 
-    // Initialise baseline (T-4) — load from disk if present
+    // Initialise baseline — load from disk if present
     if cfg.baseline.enabled {
         init_baseline(BaselineConfig {
             learning_secs: cfg.baseline.learning_secs,
@@ -268,7 +268,7 @@ async fn main() -> Result<()> {
         }
     }
 
-    // ── Preflight (T-6.6 + T-6.7) ────────────────────────────────────
+    // ── Preflight ────────────────────────────────────────────────────
     if matches!(
         cli.command,
         Commands::Daemon { .. } | Commands::Detect { .. }
@@ -282,7 +282,7 @@ async fn main() -> Result<()> {
         }
     }
 
-    // ── LSM enforcement + self-protection (T-0.9 + T-6.4) ────────────
+    // ── LSM enforcement + self-protection ────────────────────────────
     // Failures here NEVER abort the daemon; LSM stays opt-in and silent.
     if matches!(cli.command, Commands::Daemon { .. }) {
         let enf = &cfg.enforcement;
@@ -479,7 +479,7 @@ async fn run_daemon(bpf_dir: &str, cli_allow: &str, config_path: &str, cfg: &Con
         shared.insert(name, SharedAllowlist::new(lst));
     }
 
-    // F-1: destination CIDR allowlist for the network detector.
+    // Destination CIDR allowlist for the network detector.
     let (parsed_cidrs, skipped_cidrs) = parse_cidrs(&cfg.network.destination_cidr_allowlist);
     if skipped_cidrs > 0 {
         tracing::warn!(
@@ -522,7 +522,7 @@ async fn run_daemon(bpf_dir: &str, cli_allow: &str, config_path: &str, cfg: &Con
     spawn_detector!("kmod", "kmod.bpf.o", KmodDetector);
     spawn_detector!("fim", "fim.bpf.o", FimDetector);
 
-    // network — needs the destination CIDR allowlist (F-1), spawn explicitly
+    // network — needs the destination CIDR allowlist, spawn explicitly
     if cfg.detector_enabled("network") {
         let obj = format!("{dir}/network.bpf.o");
         let al = shared.get("network").cloned().unwrap();
@@ -544,8 +544,8 @@ async fn run_daemon(bpf_dir: &str, cli_allow: &str, config_path: &str, cfg: &Con
 
     // Each detector listens for SIGINT internally and breaks its loop,
     // so on Ctrl+C every join handle resolves nearly simultaneously.
-    // We wait for ALL of them — the previous "wait for any" semantics
-    // (M-5) silently dropped the survivors when the first one finished.
+    // We wait for ALL of them — a previous "wait for any" implementation
+    // silently dropped the survivors when the first one finished.
     await_all_detectors(handles).await;
     tracing::info!("kernelradar daemon stopped");
     Ok(())
@@ -587,7 +587,7 @@ fn spawn_sighup_handler(
                             let lst = new_cfg.allowlist_for(name, &fallback);
                             sl.replace(lst);
                         }
-                        // F-1: reload destination CIDR allowlist atomically
+                        // Reload destination CIDR allowlist atomically
                         let (parsed, skipped) =
                             parse_cidrs(&new_cfg.network.destination_cidr_allowlist);
                         if skipped > 0 {
@@ -610,7 +610,7 @@ fn spawn_sighup_handler(
     }
 }
 
-/// Wait for every spawned detector task to finish (M-5).
+/// Wait for every spawned detector task to finish.
 ///
 /// All detectors break their inner loop on SIGINT, so on a normal
 /// Ctrl+C every handle resolves shortly after each other. Iterating
@@ -667,15 +667,15 @@ listen_addr = "127.0.0.1:9101"
 [enforcement]
 # DANGER: enabling these LSM hooks can break the system if misconfigured.
 # All defaults are false. Test in audit mode (regular detectors) first.
-selfprotect_enabled  = false   # block kill of kernelradar itself (T-6.4)
-bpf_enforce_enabled  = false   # block BPF_PROG_LOAD by non-allowlisted (T-0.9)
-kmod_enforce_enabled = false   # block kernel module load by non-allowlisted (T-0.9)
+selfprotect_enabled  = false   # block kill of kernelradar itself
+bpf_enforce_enabled  = false   # block BPF_PROG_LOAD by non-allowlisted
+kmod_enforce_enabled = false   # block kernel module load by non-allowlisted
 bpf_allowlist        = ["bpftrace", "falco", "kernelradar"]
 kmod_allowlist       = ["modprobe", "kmod", "insmod", "systemd-udevd"]
 
 [integrity]
-# BPF object SHA-256 verification (T-6.5 + H-1). Build-time hashes are
-# embedded into the binary; at load time the bytes on disk are re-hashed.
+# BPF object SHA-256 verification. Build-time hashes are embedded into
+# the binary; at load time the bytes on disk are re-hashed.
 #
 #   strict_mode = false  (default)  — mismatch logs an error, daemon
 #                                     keeps loading. Friendly for ad-hoc
@@ -689,7 +689,7 @@ kmod_allowlist       = ["modprobe", "kmod", "insmod", "systemd-udevd"]
 strict_mode = false
 
 [network]
-# F-1: destination CIDR allowlist. connect() to addresses inside any of
+# Destination CIDR allowlist. connect() to addresses inside any of
 # these CIDRs is suppressed before process-allowlist evaluation —
 # cheaper (no /proc/<pid>/exe lookup) and more reliable than
 # allowlisting every process that legitimately calls home.

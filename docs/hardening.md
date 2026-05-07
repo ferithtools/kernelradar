@@ -1,10 +1,10 @@
 # kernelradar — Hardening guide
 
-This document covers the production hardening features (T-6) and the
-enforcement mode (T-0.9). Default settings keep the daemon strictly
-observe-only; everything below is opt-in.
+This document covers production hardening and the LSM enforcement
+mode. Default settings keep the daemon strictly observe-only;
+everything below is opt-in.
 
-## Capabilities (T-6.7)
+## Capabilities
 
 The daemon checks effective capabilities at startup and warns about
 missing ones:
@@ -19,7 +19,7 @@ missing ones:
 The systemd unit grants all four by default. To run without root,
 strip them down based on which detectors you enable.
 
-## BPF object directory (T-6.6)
+## BPF object directory
 
 `/var/lib/kernelradar/bpf` is the runtime location of all `.bpf.o`
 files. The daemon warns if the directory is world-writable or
@@ -31,10 +31,10 @@ group-writable. For maximum protection, bind-mount it read-only:
 ```
 
 Or on systems using only `tmpfs` for state, ship the BPF objects in
-the kernelradar binary itself (T-6.5 makes this safe even when the
-on-disk copy is mutable).
+the kernelradar binary itself — the integrity check below makes this
+safe even when the on-disk copy is mutable.
 
-## BPF integrity verification (T-6.5)
+## BPF integrity verification
 
 At build time, `build.rs` computes SHA-256 of every `.bpf.o` file and
 embeds the digest in the binary. At load time the daemon re-hashes
@@ -50,7 +50,7 @@ ERROR and continues. This is intentional: a hardware fault or partial
 upgrade shouldn't take down the security daemon. Investigate any
 mismatch immediately.
 
-## Prerequisite for T-6.4 / T-0.9: enable BPF in the active LSM stack
+## Prerequisite for self-protect and enforcement: enable BPF in the active LSM stack
 
 BPF LSM hooks only work when `bpf` is in the kernel's active LSM list.
 Even with `CONFIG_BPF_LSM=y`, distros usually omit it from the runtime
@@ -79,11 +79,11 @@ $ cat /sys/kernel/security/lsm
 lockdown,capability,landlock,yama,apparmor,bpf
 ```
 
-Without this, kernelradar logs `T-6.4: failed to load selfprotect`
+Without this, kernelradar logs `failed to load selfprotect`
 (or the equivalent for `enforce_bpf` / `enforce_kmod`) and falls back
 to observe-only operation.
 
-## Self-protection (T-6.4)
+## Self-protection
 
 `enforcement.selfprotect_enabled = true` loads a BPF LSM hook that
 returns `-EPERM` for `task_kill` aimed at kernelradar's own TGID.
@@ -100,7 +100,7 @@ Disabling self-protection requires either:
 There is no userspace force-kill. Use this only when you have
 remote console / IPMI access in case of a daemon malfunction.
 
-## Enforcement mode (T-0.9)
+## Enforcement mode
 
 Two LSM hooks block syscalls for non-allowlisted processes:
 
@@ -150,7 +150,7 @@ When enabling enforcement on a real server:
 3. **Have console access ready** (IPMI, KVM, physical) — if enforcement
    misfires, you may not be able to SSH in if sshd somehow gets blocked.
 4. **Enable one hook at a time**, restart, watch.
-5. **Monitor `journalctl -t kernelradar -f`** for `T-0.9` errors.
+5. **Monitor `journalctl -t kernelradar -f`** for enforcement errors.
 
 ## Recovery
 

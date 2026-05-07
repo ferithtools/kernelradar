@@ -4,13 +4,13 @@
 // Part of the kernelradar project — Linux kernel anomaly detection via BPF.
 // See LICENSE for terms.
 
-/// BPF object integrity check (T-6.5).
+/// BPF object integrity check.
 ///
 /// At build time, build.rs computes SHA-256 of every .bpf.o file and
 /// embeds the digest in the binary. At load time we re-hash the file
 /// on disk and compare.
 ///
-/// Two modes (H-1):
+/// Two modes:
 ///   • Default — mismatch → loud `error!` log, daemon continues. Lets
 ///     admins see drift immediately without breaking startup on the
 ///     normal "I rebuilt the BPF objects after install" case.

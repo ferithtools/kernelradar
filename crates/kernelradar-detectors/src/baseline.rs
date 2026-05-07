@@ -4,7 +4,7 @@
 // Part of the kernelradar project — Linux kernel anomaly detection via BPF.
 // See LICENSE for terms.
 
-/// Adaptive baseline + sigma-based anomaly scoring (T-4).
+/// Adaptive baseline with sigma-based anomaly scoring.
 ///
 /// For each (detector, comm) pair we keep 24 hour-of-day buckets. Each
 /// bucket tracks an EWMA of events-per-minute (mean + mean of squares,
@@ -15,7 +15,7 @@
 /// "is this rate anomalous?" by computing z = (observed − mean) / σ.
 ///
 /// Persistence: serialised to JSON every save_interval and at shutdown.
-/// Corrupted file → start fresh, log warning (T-4.8).
+/// Corrupted file → start fresh, log warning.
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock};
@@ -36,19 +36,18 @@ pub struct BaselineConfig {
     pub save_path: String,
     /// How often to flush to disk.
     pub save_interval_secs: u64,
-    /// M-3: cap on the number of (detector, comm) pairs tracked. Once
-    /// reached, pairs whose `last_seen` is older than `evict_age_hours`
-    /// are dropped. Protects against unbounded HashMap growth from
-    /// short-lived containers, fuzzing, or hostile flooding under
-    /// many fake comms.
+    /// Cap on the number of (detector, comm) pairs tracked. Once reached,
+    /// pairs whose `last_seen` is older than `evict_age_hours` are dropped.
+    /// Protects against unbounded HashMap growth from short-lived
+    /// containers, fuzzing, or hostile flooding under many fake comms.
     ///
     /// `serde(default)` so a baseline.json written by an older build
     /// (without these fields) still deserialises — the field gets
     /// `BaselineConfig::default().pairs_max` instead of failing.
     #[serde(default = "default_pairs_max")]
     pub pairs_max: usize,
-    /// M-3: minimum staleness for eviction; younger pairs are kept
-    /// even at cap (in which case nothing is evicted that pass).
+    /// Minimum staleness for eviction; younger pairs are kept even at
+    /// cap (in which case nothing is evicted on that pass).
     #[serde(default = "default_evict_age_hours")]
     pub evict_age_hours: i64,
 }
@@ -160,8 +159,8 @@ impl Baseline {
         let hour = now.hour() as usize;
         let key = Self::key(detector, comm);
 
-        // M-3: Evict stale pairs when the table grows past the cap. We
-        // only walk + retain when over cap so the steady state is free.
+        // Evict stale pairs when the table grows past the cap. We only
+        // walk + retain when over cap so the steady state is free.
         if self.pairs.len() >= self.config.pairs_max {
             let cutoff = now - chrono::Duration::hours(self.config.evict_age_hours);
             let before = self.pairs.len();
@@ -241,7 +240,7 @@ impl Baseline {
         std::fs::write(&tmp, text)?;
         std::fs::rename(&tmp, &path)?;
 
-        // M-7: tighten permissions after the rename. set_permissions on a
+        // Tighten permissions after the rename. set_permissions on a
         // freshly-renamed file is the right place — chmod on the tmp would
         // race with the rename. Failure here is logged but not fatal: the
         // file still exists, just with whatever umask gave it.
@@ -322,7 +321,7 @@ pub fn init_with_config(config: BaselineConfig) {
 }
 
 fn lock() -> std::sync::MutexGuard<'static, Baseline> {
-    // M-8: on poison we keep going — baseline is best-effort statistical
+    // On poison we keep going — baseline is best-effort statistical
     // data, the panic that poisoned the mutex was already reported. A
     // potentially-inconsistent record is preferable to a daemon-wide crash.
     GLOBAL

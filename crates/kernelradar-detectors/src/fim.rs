@@ -4,7 +4,7 @@
 // Part of the kernelradar project — Linux kernel anomaly detection via BPF.
 // See LICENSE for terms.
 
-/// File Integrity Monitor — T-0.5
+/// File Integrity Monitor.
 ///
 /// Watches openat() calls with write/append/create flags against
 /// sensitive paths under /etc, /root, /home. BPF does cheap prefix
@@ -164,7 +164,7 @@ impl FimDetector {
         verify_bpf("fim", &bytes)?;
         let mut bpf = Ebpf::load(&bytes).context("verifier rejected fim BPF")?;
 
-        // H-3: pin kr_stats for external tooling.
+        // Pin kr_stats for external tooling.
         if let Some(stats) = bpf.map_mut("kr_stats") {
             let _ = stats.pin("/sys/fs/bpf/kr_stats_fim");
         }

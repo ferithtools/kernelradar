@@ -4,7 +4,7 @@
 // Part of the kernelradar project — Linux kernel anomaly detection via BPF.
 // See LICENSE for terms.
 
-/// Network anomaly detector — T-0.6
+/// Network anomaly detector.
 ///
 /// Watches outbound connect() to public (non-private) IPv4 addresses.
 /// BPF filters out loopback, RFC1918, link-local, CGNAT, multicast.
@@ -31,8 +31,8 @@ const SUSPICIOUS_PORTS: &[u16] = &[
 pub struct NetworkDetector {
     bpf_obj_path: String,
     allowlist: SharedAllowlist,
-    /// Destination CIDR allowlist (F-1). Connections to addresses inside
-    /// any listed CIDR are suppressed before process-allowlist evaluation.
+    /// Destination CIDR allowlist. Connections to addresses inside any
+    /// listed CIDR are suppressed before process-allowlist evaluation.
     cidrs: SharedCidrList,
 }
 
@@ -53,7 +53,7 @@ impl NetworkDetector {
         verify_bpf("network", &bytes)?;
         let mut bpf = Ebpf::load(&bytes).context("verifier rejected network BPF")?;
 
-        // H-3: pin kr_stats for external tooling.
+        // Pin kr_stats for external tooling.
         if let Some(stats) = bpf.map_mut("kr_stats") {
             let _ = stats.pin("/sys/fs/bpf/kr_stats_network");
         }
@@ -105,7 +105,7 @@ impl NetworkDetector {
         let ip_host = u32::from_be(addr_be);
         let ip = Ipv4Addr::from(ip_host);
 
-        // F-1: destination CIDR allowlist short-circuits before process
+        // Destination CIDR allowlist short-circuits before process
         // attribution — saves the /proc/<pid>/exe read for whitelisted
         // destinations on busy hosts (Telegram heartbeats, etc.).
         if self.cidrs.contains(ip_host) {

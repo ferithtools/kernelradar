@@ -4,7 +4,7 @@
 // Part of the kernelradar project — Linux kernel anomaly detection via BPF.
 // See LICENSE for terms.
 
-/// Prometheus /metrics endpoint (T-5.4).
+/// Prometheus /metrics endpoint.
 ///
 /// Tiny HTTP server (tokio TcpListener — no external HTTP framework).
 /// Serves the Prometheus text exposition format on
@@ -133,7 +133,7 @@ fn render_metrics() -> String {
     }
 
     // ── Anomalies ──
-    out.push_str("# HELP kernelradar_anomalies_total Statistical anomalies (T-4)\n");
+    out.push_str("# HELP kernelradar_anomalies_total Statistical anomalies\n");
     out.push_str("# TYPE kernelradar_anomalies_total counter\n");
     for (det, n) in cumulative_anomalies() {
         out.push_str(&format!(

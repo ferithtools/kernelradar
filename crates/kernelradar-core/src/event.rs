@@ -61,7 +61,7 @@ impl std::fmt::Display for Severity {
 mod tests {
     use super::*;
 
-    /// T-9.5 — KrEvent layout matches BPF-side struct.
+    /// KrEvent layout matches BPF-side struct.
     #[test]
     fn krevent_layout_is_repr_c_and_known_size() {
         let s = std::mem::size_of::<KrEvent>();
@@ -71,7 +71,7 @@ mod tests {
         assert_eq!(std::mem::align_of::<KrEvent>(), 8);
     }
 
-    /// T-9.5 — Severity variants order matches the BPF KR_SEV_* defines.
+    /// Severity variants order matches the BPF KR_SEV_* defines.
     #[test]
     fn severity_numeric_values() {
         assert_eq!(Severity::Info as u8, 0);
@@ -83,7 +83,7 @@ mod tests {
         assert!(Severity::Warning > Severity::Info);
     }
 
-    /// T-9.5 — DetectorId values match the BPF KR_DETECTOR_* defines (1..=8).
+    /// DetectorId values match the BPF KR_DETECTOR_* defines (1..=8).
     #[test]
     fn detector_id_numeric_values() {
         assert_eq!(DetectorId::PrivEsc as u8, 1);
@@ -96,8 +96,8 @@ mod tests {
         assert_eq!(DetectorId::Cred as u8, 8);
     }
 
-    /// T-9.8 — fuzz: arbitrary bytes coming out of a BPF ring buffer must
-    /// never panic the userspace parser. Mirrors the detector pattern of
+    /// Fuzz: arbitrary bytes coming out of a BPF ring buffer must never
+    /// panic the userspace parser. Mirrors the detector pattern of
     /// `read_unaligned` after a length check.
     #[test]
     fn ringbuf_parse_never_panics_on_arbitrary_bytes() {

@@ -30,3 +30,7 @@ config.local.toml
 # the binary tarball itself is not in git (lives on GitHub Releases).
 /dist/
 ADMIN_README.md  # internal admin doc; never push
+
+# Internal trackers — never commit
+k-radar_backlog.md
+*.local.md

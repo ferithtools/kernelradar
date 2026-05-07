@@ -54,6 +54,6 @@ For each `vX.Y.Z` directory:
   tarball (binary, `.bpf.o` files, `.service`, `LICENSE`, `README`,
   `install.sh`, `config.toml.example`).
 
-A future task (T-15) will add a `verify-remote.sh` script that
+A future release will add a `verify-remote.sh` script that
 periodically pulls the release artifact and re-checks against this
 pin from a different host, alerting on mismatch.

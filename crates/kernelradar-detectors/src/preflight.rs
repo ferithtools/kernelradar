@@ -4,7 +4,7 @@
 // Part of the kernelradar project — Linux kernel anomaly detection via BPF.
 // See LICENSE for terms.
 
-/// Startup preflight checks (T-6.6 + T-6.7).
+/// Startup preflight checks.
 ///
 /// Verifies that the running process has the capabilities BPF needs,
 /// warns about insecure permissions on the BPF object directory,
@@ -114,10 +114,10 @@ pub fn check_bpf_dir(path: &str) {
         }
     }
 
-    // Read-only mount hint. M-6: pick the LONGEST mountpoint that's a
-    // prefix of `path`, not just the first match. /proc/mounts almost
-    // always lists `/` first, which would otherwise short-circuit and
-    // miss the real bind/overlay mount sitting closer to our path.
+    // Read-only mount hint. Pick the LONGEST mountpoint that's a prefix
+    // of `path`, not just the first match. /proc/mounts almost always
+    // lists `/` first, which would otherwise short-circuit and miss the
+    // real bind/overlay mount sitting closer to our path.
     if let Ok(mounts) = std::fs::read_to_string("/proc/mounts") {
         let mut candidates: Vec<(&str, &str)> = mounts
             .lines()

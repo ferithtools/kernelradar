@@ -55,7 +55,7 @@
 
 #define KR_CRED_READ            1   /* read open of credential file */
 
-/* ── Stats counter slots (T-7.2/T-7.3) ──────────────────────────────── */
+/* ── Stats counter slots ───────────────────────────────────────────── */
 /* All BPF programs share one BPF_MAP_TYPE_ARRAY of __u64 with these
  * indices. Userspace reads them periodically for Prometheus metrics. */
 

@@ -6,9 +6,8 @@ the project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-— Tracked items live in [`k-radar_backlog.md`](k-radar_backlog.md).
 The next planned release is the **v0.1.x** patch series (Q2 2026)
-covering `--dry-run`/`--audit-only` enforcement, `kr_stats`
+covering `--dry-run` / `--audit-only` enforcement, `kr_stats`
 counters in the Prometheus exporter, IPv6 destination CIDR
 allowlist, per-detector documentation, the email-integration
 recipe, and the first `.deb` package.
@@ -16,8 +15,8 @@ recipe, and the first `.deb` package.
 ## [v0.1.0] — 2026-05-07
 
 First public preview. The full feature surface is implemented and
-production-tested on a Debian 12 / kernel 6.13.9 host; there is no
-GitHub release artifact yet beyond what's pinned in
+production-tested on a Debian 12 / kernel 6.13.9 host; the GitHub
+release tarball is pinned by SHA-256 in
 [`release-checksums/v0.1.0/`](release-checksums/v0.1.0/).
 
 ### Added — eight in-tree detectors
@@ -30,7 +29,7 @@ GitHub release artifact yet beyond what's pinned in
   (`/etc/passwd`, `/etc/shadow`, `~/.ssh/`, `/etc/cron.*/`,
   `/etc/systemd/`, `/etc/init.d/`, `/etc/pam.d/`).
 - **network** — outbound `connect()` to public IPv4, with severity
-  bumping for known reverse-shell ports and (F-1) a destination CIDR
+  bumping for known reverse-shell ports and a destination CIDR
   allowlist that suppresses connections to whitelisted ranges before
   process attribution.
 - **injection** — `ptrace(PTRACE_ATTACH/SEIZE/POKE*)` and
@@ -38,7 +37,7 @@ GitHub release artifact yet beyond what's pinned in
 - **cred** — read-mode `openat()` against credential files (shadow,
   sudoers, ssh private keys, browser cookies).
 
-### Added — observability + integrations
+### Added — observability and integrations
 
 - Structured journald output with custom fields (`DETECTOR=`,
   `SEVERITY=`, `PID=`, `UID=`, `COMM=`, `CORRELATION_ID=`).
@@ -46,30 +45,30 @@ GitHub release artifact yet beyond what's pinned in
   to avoid colliding with `node_exporter`).
 - HTTP webhook with bearer-token auth, severity filter, and a
   sanitised URL field in failure logs (Slack / Telegram path-token
-  leak prevented — H-4).
+  leak prevented).
 - Falco-compatible JSON output for SIEMs already ingesting Falco.
 - Recipes in [`docs/integrations/`](docs/integrations/) for Wazuh,
-  Prometheus, Loki / Vector / Fluent Bit, Slack & Telegram, and
+  Prometheus, Loki / Vector / Fluent Bit, Slack and Telegram, and
   Falco-compatible aggregators.
 
 ### Added — engine
 
 - Adaptive baseline with per-(detector, comm, hour-of-day) EWMA
-  buckets and σ-based anomaly scoring (T-4).
-- Rate limiting + burst detection + exponential back-off (T-3).
+  buckets and σ-based anomaly scoring.
+- Rate limiting, burst detection, and exponential back-off.
 - BPF integrity check via build-time SHA-256 with `[integrity]
-  strict_mode` to harden refusal-to-load (H-1).
+  strict_mode` to harden refusal-to-load.
 - Per-detector `kr_stats` counters (observed / dropped) pinned at
-  `/sys/fs/bpf/kr_stats_<det>` for external metric collectors (H-3).
+  `/sys/fs/bpf/kr_stats_<det>` for external metric collectors.
 - LSM enforcement modes (off by default): `selfprotect` (block kill
-  of the daemon's own PID, T-6.4), `enforce_bpf` (block
-  `BPF_PROG_LOAD` from non-allowlisted comms), `enforce_kmod` (block
-  `kmod` loads from non-allowlisted comms — process allowlist, not a
-  signature check). All three integrity-checked at load (H-2).
+  of the daemon's own PID), `enforce_bpf` (block `BPF_PROG_LOAD`
+  from non-allowlisted comms), `enforce_kmod` (block `kmod` loads
+  from non-allowlisted comms — a process allowlist, not a signature
+  check). All three integrity-checked at load.
 
 ### Added — operability
 
-- TOML configuration with hot-reload via `SIGHUP` (T-2.6).
+- TOML configuration with hot-reload via `SIGHUP`.
 - `kernelradar config-cmd validate|show|example` for config
   troubleshooting.
 - `kernelradar baseline show|status|reset` for the adaptive model.
@@ -82,49 +81,46 @@ GitHub release artifact yet beyond what's pinned in
   operators can pin a version reproducibly.
 - `make release-tarball` produces a self-contained installable
   bundle plus inner-file SHA-256s.
-- `release-checksums/<ver>/` in-repo SHA-256 pin so any consumer
+- In-repo `release-checksums/<ver>/` SHA-256 pin so any consumer
   can verify the GitHub-served archive against a value committed
-  at release time (T-15.1, T-15.2).
+  at release time.
 
 ### Security — pre-publication audit
 
-A full code-review pass surfaced and fixed:
+A full code-review pass before publication surfaced and fixed:
 
-- **H-1** — integrity-check `strict_mode` config to refuse loading
-  on hash mismatch.
-- **H-2** — LSM enforcement objects now hash-verified at load (was
-  accepting any bytes silently).
-- **H-3** — `kr_stats` counters were only populated by the
-  `privesc` detector; the other seven were silently zero.
-- **H-4** — webhook URL fully logged on failure leaked Slack /
-  Telegram path-tokens via journald; now sanitised to
-  scheme+host+port only.
-- **M-1** — `/proc/<pid>/exe` lookup post-event raced PID reuse
-  and `execve`; now verified against `/proc/<pid>/comm` matching
-  the BPF-captured value.
-- **M-2** — allowlist prefix-match (`comm.starts_with(entry)`) let
-  an `sshd` allowlist cover an `sshooly-rev-shell`. Removed; use
-  regex `/^prefix.*/` for prefix semantics.
-- **M-3** — `Baseline::pairs` HashMap had no eviction, growing
-  unbounded with per-(detector, comm) pairs from short-lived
-  containers or hostile flooding. Capped at `pairs_max` (default
-  10 000); pairs older than `evict_age_hours` (default 7 days)
-  are dropped on overflow.
-- **M-4** — network-detector multicast filter checked `b0 == 224`
-  (one /8) instead of `b0 >= 224` (multicast /4 + reserved /4),
-  letting addresses 225/8–255/8 through as public IPv4.
-- **M-5** — "wait for any handle" shutdown actually awaited only
-  `handles[0]` and dropped the rest, silently cancelling
-  surviving detectors. Now waits for every detector cleanly.
-- **M-6** — `/proc/mounts` longest-prefix match used first-match
-  semantics; `/` always won. Now sorts by mountpoint length
-  descending.
-- **M-7** — `baseline.json` wrote with default `umask` (often
-  `0644`); the file's content is a system fingerprint. Now
-  `chmod 0640` after the atomic rename.
-- **M-8** — global mutexes used `.expect("…")`; a panic on one
-  thread cascaded daemon-wide on every subsequent lock. Replaced
-  with `.unwrap_or_else(|e| e.into_inner())` recovery.
+- Integrity-check `strict_mode` configuration option that refuses
+  to load any BPF object on hash mismatch.
+- LSM enforcement objects are hash-verified at load (previously
+  accepted any bytes silently).
+- `kr_stats` observed / dropped counters are now populated by every
+  detector (previously only the privesc detector wrote them; the
+  other seven were silently zero).
+- Webhook URLs in failure logs are sanitised to `scheme://host:port`,
+  preventing Slack / Telegram path-token leaks via journald.
+- `/proc/<pid>/exe` lookup after a BPF event now re-verifies
+  `/proc/<pid>/comm` against the BPF-captured value, closing a PID
+  reuse + `execve` race.
+- Allowlist matching uses exact-equality, not `comm.starts_with`,
+  so an `sshd` allowlist no longer covers a hypothetical
+  `sshooly-rev-shell`. For prefix semantics, use a regex.
+- Adaptive baseline pair store is now bounded: `pairs_max` (default
+  10 000) caps total entries, and pairs older than
+  `evict_age_hours` (default 7 days) are dropped on overflow.
+  Hostile flooding or short-lived container churn no longer grows
+  the table without bound.
+- Network detector's multicast filter now correctly excludes the
+  full multicast /4 + reserved /4 (`b0 >= 224`) instead of only
+  the `b0 == 224` octet.
+- Shutdown waits for every detector cleanly instead of dropping
+  all but the first handle.
+- `/proc/mounts` longest-prefix match now sorts mountpoints by
+  length descending (previously first-match always picked `/`).
+- `baseline.json` is `chmod 0640` after the atomic rename, since
+  its content is a system fingerprint.
+- Global mutexes recover from poisoning via
+  `.unwrap_or_else(|e| e.into_inner())`; a panic on one thread no
+  longer cascades daemon-wide on every subsequent lock.
 
 ### Performance (measured)
 
@@ -148,17 +144,17 @@ Methodology and per-stage breakdown live in
 
 - The network detector is IPv4-only; the kernel-side BPF probe
   drops anything that isn't `AF_INET`, so IPv6 connections are
-  not observed in v0.1. Tracked as T-12.4 (Q2 2026).
+  not observed in v0.1. Targeted for the v0.1.x patch series.
 - LSM enforcement requires `lsm=...,bpf` in the kernel `cmdline`;
   on stock distributions the daemon falls back to observe-only
   with a warning.
 - `kr_stats` counters are read-only via `bpftool map dump pinned`;
-  the Prometheus exporter does not yet surface them. Tracked as
-  T-12.3 / F-3 (Q2 2026).
+  the Prometheus exporter does not yet surface them. Targeted for
+  the v0.1.x patch series.
 - Process attribution (`/proc/<pid>/exe` + `comm` re-check) closes
   most of the TOCTOU window but not all of it for processes that
   `execve` to a binary sharing the first 15 comm bytes
-  (TASK_COMM_LEN). Tracked as a known accuracy bound, not a
+  (`TASK_COMM_LEN`). Treated as a known accuracy bound, not a
   scheduled fix — kernel-side path capture would close this.
 
 ### Compatibility
@@ -173,8 +169,5 @@ Methodology and per-stage breakdown live in
 - Sections per release: **Added**, **Changed**, **Deprecated**,
   **Removed**, **Fixed**, **Security**.
 - Date format: `YYYY-MM-DD`.
-- Reference task ids from
-  [`k-radar_backlog.md`](k-radar_backlog.md) (`T-N`, `H-N`, `M-N`,
-  `F-N`) where applicable.
 - Link to commits / PRs / issues from the bullet text, not from
   prose, so changelog entries remain readable in plain text.

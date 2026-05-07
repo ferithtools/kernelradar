@@ -11,7 +11,7 @@ env:
 
 jobs:
   fmt:
-    name: cargo fmt (T-9.3)
+    name: cargo fmt
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -21,7 +21,7 @@ jobs:
       - run: cargo fmt --all --check
 
   clippy:
-    name: cargo clippy (T-9.2)
+    name: cargo clippy
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -33,7 +33,7 @@ jobs:
         run: cargo clippy --workspace --all-targets -- -D warnings
 
   build-test:
-    name: build + test (T-9.1, T-9.5, T-9.8)
+    name: build + test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -45,7 +45,7 @@ jobs:
         run: cargo test --workspace --all-targets
 
   bpf:
-    name: BPF build (T-9.4)
+    name: BPF build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -81,7 +81,7 @@ jobs:
           done
 
   audit:
-    name: cargo audit (T-9.9)
+    name: cargo audit
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

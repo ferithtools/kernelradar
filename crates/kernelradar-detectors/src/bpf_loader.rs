@@ -58,7 +58,7 @@ fn prog_type_name(t: u32) -> &'static str {
 mod tests {
     use super::*;
 
-    /// T-9.5 — known BPF prog type indices map to their kernel names.
+    /// Known BPF prog type indices map to their kernel names.
     #[test]
     fn prog_type_name_known_indices() {
         assert_eq!(prog_type_name(0), "UNSPEC");
@@ -71,7 +71,7 @@ mod tests {
         assert_eq!(prog_type_name(32), "NETFILTER");
     }
 
-    /// T-9.5 — out-of-range and saturating-large indices fall back to "UNKNOWN".
+    /// Out-of-range and saturating-large indices fall back to "UNKNOWN".
     #[test]
     fn prog_type_name_unknown_for_oob() {
         assert_eq!(prog_type_name(PROG_TYPES.len() as u32), "UNKNOWN");
@@ -79,7 +79,7 @@ mod tests {
         assert_eq!(prog_type_name(u32::MAX), "UNKNOWN");
     }
 
-    /// T-9.5 — every defined index resolves (no holes in the table).
+    /// Every defined index resolves (no holes in the table).
     #[test]
     fn prog_type_name_table_complete() {
         for i in 0..PROG_TYPES.len() as u32 {
@@ -114,8 +114,8 @@ impl BpfLoaderDetector {
         verify_bpf("bpf_loader", &bytes)?;
         let mut bpf = Ebpf::load(&bytes).context("verifier rejected bpf_loader BPF")?;
 
-        // H-3: pin kr_stats so external tools and the Prometheus
-        // exporter can read observed/dropped counts.
+        // Pin kr_stats so external tools and the Prometheus exporter
+        // can read observed/dropped counts.
         if let Some(stats) = bpf.map_mut("kr_stats") {
             let _ = stats.pin("/sys/fs/bpf/kr_stats_bpfl");
         }

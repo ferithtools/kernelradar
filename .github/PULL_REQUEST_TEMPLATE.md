@@ -9,8 +9,8 @@ For full guidelines see CONTRIBUTING.md.
 
 ## Linked issue / task
 
-<!-- "Closes #N" / "Refs #N" / "T-13.1" — leave blank if it's a
-     drive-by fix that doesn't have an issue. -->
+<!-- "Closes #N" / "Refs #N" — leave blank if it's a drive-by fix
+     that doesn't have an issue. -->
 
 ## Type of change
 

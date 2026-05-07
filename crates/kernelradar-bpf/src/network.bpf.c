@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Copyright (C) 2026 Ferith Tools
 //
-// kernelradar — Network anomaly detector (T-0.6)
+// kernelradar — Network anomaly detector
 //
 // Hooks sys_enter_connect. Filters in BPF: emit events only for
 // AF_INET connections to non-private IPv4 addresses (filters out

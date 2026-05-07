@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Copyright (C) 2026 Ferith Tools
 //
-// kernelradar — Credential theft detector (T-0.8)
+// kernelradar — Credential theft detector
 //
 // Watches sys_enter_openat for READ access to a narrow set of
 // credential files: /etc/shadow, /etc/gshadow, /root/.ssh/...,

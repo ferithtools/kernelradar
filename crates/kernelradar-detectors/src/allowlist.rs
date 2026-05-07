@@ -4,7 +4,7 @@
 // Part of the kernelradar project — Linux kernel anomaly detection via BPF.
 // See LICENSE for terms.
 
-/// Shared allowlist with hot-reload support (T-2.4 + T-2.6).
+/// Shared allowlist with hot-reload support.
 ///
 /// Each detector holds an `Arc<SharedAllowlist>`; SIGHUP handler in
 /// CLI replaces the inner Vec atomically. Read path is lock-free

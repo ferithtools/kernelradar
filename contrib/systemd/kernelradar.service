@@ -50,8 +50,8 @@ LockPersonality=true
 MemoryDenyWriteExecute=false
 
 # Network: AF_INET[6] required for the optional Prometheus endpoint
-# (T-5.4) and webhook output (T-5.3). Drop them in pure-journald
-# deployments by changing this line to "AF_UNIX AF_NETLINK".
+# and webhook output. Drop them in pure-journald deployments by
+# changing this line to "AF_UNIX AF_NETLINK".
 RestrictAddressFamilies=AF_UNIX AF_NETLINK AF_INET AF_INET6
 
 # Resource limits — keep small, BPF programs are tiny

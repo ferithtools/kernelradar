@@ -37,7 +37,7 @@ pub fn read_exe_path(pid: u32) -> Option<String> {
 /// still matches the `comm` captured by BPF at event time. Returns
 /// None if the comm differs — that's the signal that the PID was
 /// reused or the process execve'd into something else between the
-/// event and userspace catch-up (M-1 TOCTOU mitigation).
+/// event and userspace catch-up (TOCTOU mitigation).
 ///
 /// Note: TASK_COMM_LEN is 16, so a target comm sharing the first
 /// 15 bytes with the original can still slip through. This narrows
@@ -61,10 +61,10 @@ pub fn read_exe_path_verified(pid: u32, ev_comm: &str) -> Option<String> {
 ///   • exact exe match     — full path equality with `exe`
 ///   • exact basename match — equality with last path segment of `exe`
 ///
-/// M-2: prefix matching has been removed. Earlier versions also matched
-/// when `comm.starts_with(entry)`, which let `"sshd"` allowlist
-/// `"sshooly-rev-shell"`. Use `/^prefix.*/` regex when you need
-/// prefix semantics.
+/// Prefix matching is intentionally NOT supported here. An earlier
+/// version matched on `comm.starts_with(entry)`, which let `"sshd"`
+/// allowlist `"sshooly-rev-shell"`. Use `/^prefix.*/` regex when you
+/// need prefix semantics.
 pub fn is_allowed(comm: &str, exe: Option<&str>, allowlist: &[String]) -> bool {
     let exe_basename = exe.and_then(|p| p.rsplit('/').next());
 
@@ -146,11 +146,11 @@ pub fn make_alert(
 ///   Journald — tracing event with structured fields,
 ///              consumed by tracing-journald layer
 pub fn print_alert(alert: &Alert, _legacy_json: bool) {
-    // T-4: Update baseline + score regardless of rate limit decision.
+    // Update baseline + score regardless of rate limit decision.
     // Suppressed events still feed the model — that IS the model.
     let z = baseline_score(&alert.detector, &alert.comm);
 
-    // T-3: rate limit / burst / backoff
+    // Rate limit / burst / backoff
     let decision = rate_check(
         &alert.detector,
         &alert.comm,
@@ -344,7 +344,7 @@ mod tests {
         }
     }
 
-    /// T-9.5 — comm_str trims at first NUL byte.
+    /// comm_str trims at first NUL byte.
     #[test]
     fn comm_str_trims_at_nul() {
         assert_eq!(comm_str(&ev_with_comm(b"sshd\0\0\0")), "sshd");
@@ -352,7 +352,7 @@ mod tests {
         assert_eq!(comm_str(&ev_with_comm(b"\0")), "");
     }
 
-    /// T-9.5 — comm_str without NUL uses full 16 bytes.
+    /// comm_str without NUL uses full 16 bytes.
     #[test]
     fn comm_str_no_nul_uses_full_buffer() {
         let buf = [b'A'; 16];
@@ -360,7 +360,7 @@ mod tests {
         assert_eq!(comm_str(&ev), "AAAAAAAAAAAAAAAA");
     }
 
-    /// T-9.5 — invalid UTF-8 is replaced lossily, no panic.
+    /// Invalid UTF-8 is replaced lossily, no panic.
     #[test]
     fn comm_str_lossy_on_invalid_utf8() {
         let bytes = [0xFFu8, 0xFE, b'a', 0];
@@ -370,7 +370,7 @@ mod tests {
         assert!(!s.contains('\0'));
     }
 
-    /// T-9.8 — fuzz: arbitrary 16-byte comm content must never panic.
+    /// Fuzz: arbitrary 16-byte comm content must never panic.
     #[test]
     fn comm_str_fuzz_never_panics() {
         let mut state: u64 = 0xCAFE_BABE_DEAD_BEEF;
@@ -405,8 +405,8 @@ mod tests {
         let al = vec!["sshd".to_string()];
         assert!(is_allowed("sshd", None, &al));
         assert!(!is_allowed("ssh", None, &al));
-        // M-2: prefix matching removed. "sshooly-rev-shell" no longer
-        // sneaks past an "sshd" allowlist via comm.starts_with.
+        // Prefix matching is intentionally rejected — "sshooly-rev-shell"
+        // must not sneak past an "sshd" allowlist via comm.starts_with.
         assert!(!is_allowed("sshd-session", None, &al));
         assert!(!is_allowed("sshooly", None, &al));
     }

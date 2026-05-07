@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Copyright (C) 2026 Ferith Tools
 //
-// kernelradar — Process injection detector (T-0.7)
+// kernelradar — Process injection detector
 //
 // Hooks:
 //   sys_enter_ptrace            — only emit for ATTACH/SEIZE/POKE*

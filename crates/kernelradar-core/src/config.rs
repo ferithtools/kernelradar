@@ -33,16 +33,16 @@ pub struct Config {
     pub prometheus: PromTomlConfig,
     pub enforcement: EnforcementTomlConfig,
     pub integrity: IntegrityTomlConfig,
-    /// Network-detector-specific tunables (F-1).
-    /// Generic per-detector knobs (enabled, allowlist) stay in `detectors`.
+    /// Network-detector-specific tunables. Generic per-detector knobs
+    /// (enabled, allowlist) stay in `detectors`.
     pub network: NetworkTomlConfig,
     pub detectors: BTreeMap<String, DetectorConfig>,
 }
 
-/// BPF integrity check (T-6.5 + H-1). When `strict_mode = true`, a hash
-/// mismatch refuses to load the affected detector instead of just
-/// warning. Default `false` keeps the friendly "warn but continue"
-/// behaviour for first-time installs.
+/// BPF integrity check. When `strict_mode = true`, a hash mismatch
+/// refuses to load the affected detector instead of just warning.
+/// Default `false` keeps the friendly "warn but continue" behaviour
+/// for first-time installs.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct IntegrityTomlConfig {
@@ -62,8 +62,8 @@ pub struct NetworkTomlConfig {
     pub destination_cidr_allowlist: Vec<String>,
 }
 
-/// LSM enforcement (T-0.9) and self-protection (T-6.4).
-/// All flags default to false — enabling these can break the system.
+/// LSM enforcement and self-protection. All flags default to false —
+/// enabling these can break the system.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct EnforcementTomlConfig {
@@ -146,10 +146,10 @@ pub struct BaselineTomlConfig {
     pub save_path: String,
     /// How often to flush to disk
     pub save_interval_secs: u64,
-    /// M-3: cap on tracked (detector, comm) pairs. Eviction kicks in
-    /// when the table reaches this size.
+    /// Cap on tracked (detector, comm) pairs. Eviction kicks in when
+    /// the table reaches this size.
     pub pairs_max: usize,
-    /// M-3: pairs older than this (last_seen-wise) are evicted when at cap.
+    /// Pairs older than this (last_seen-wise) are evicted when at cap.
     pub evict_age_hours: i64,
 }
 

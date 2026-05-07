@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Copyright (C) 2026 Ferith Tools
 //
-// kernelradar — kmod enforcement (T-0.9)
+// kernelradar — kmod enforcement
 //
 // LSM hook on kernel_read_file that denies READING_MODULE when the
 // calling process is not allowlisted. OFF by default.

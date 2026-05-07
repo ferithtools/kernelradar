@@ -134,7 +134,7 @@ journalctl -u kernelradar -f -o cat
 ```
 
 > 🔒 The release is signed only by SHA-256 pinned in the source tree.
-> GPG release signing lands in v0.2 (T-15.6).
+> GPG release signing lands in v0.2.
 
 ### Option B — build from source
 
@@ -557,7 +557,7 @@ journalctl -u kernelradar -f -o cat
 ```
 
 > 🔒 Релиз подписан только SHA-256, который зафиксирован в дереве
-> исходников. GPG-подпись релизов появится в v0.2 (T-15.6).
+> исходников. GPG-подпись релизов появится в v0.2.
 
 ### Вариант B — собрать из исходников
 

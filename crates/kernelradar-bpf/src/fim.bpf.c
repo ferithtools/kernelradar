@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Copyright (C) 2026 Ferith Tools
 //
-// kernelradar — File Integrity Monitor (T-0.5)
+// kernelradar — File Integrity Monitor
 //
 // Hooks sys_enter_openat. Filters in BPF: only emit events for
 // openat() with write/append/create flags AND path under sensitive

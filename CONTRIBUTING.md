@@ -112,15 +112,11 @@ Types we use:
 - `release` — version bump, tag preparation
 - `refactor` — non-behavioural code changes
 
-Task ids reference the [`backlog`](k-radar_backlog.md) (`T-N` for
-tracked work, `H-N` / `M-N` for security audit findings, `F-N` for
-forward features). They're optional but useful for traceability.
-
 Examples:
 
 ```
-feat T-13.1: persistence detector — bashrc/cron/systemd watch
-fix M-2: drop allowlist prefix-match — sshd no longer covers sshooly
+feat: persistence detector — bashrc/cron/systemd watch
+fix: drop allowlist prefix-match — sshd no longer covers sshooly
 docs(readme): clarify IPv6 limitation in the comparison table
 ```
 

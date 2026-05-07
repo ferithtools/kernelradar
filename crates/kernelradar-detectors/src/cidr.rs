@@ -5,7 +5,7 @@
 // See LICENSE for terms.
 
 //! IPv4 CIDR matcher with hot-reload support, for the network detector's
-//! destination allowlist (F-1).
+//! destination allowlist.
 //!
 //! Modeled after `SharedAllowlist`: each detector holds an `Arc<RwLock>`,
 //! the SIGHUP handler in CLI replaces the inner Vec atomically.

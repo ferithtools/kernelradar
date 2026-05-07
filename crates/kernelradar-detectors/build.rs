@@ -6,7 +6,7 @@
 
 /// Compute SHA-256 hashes of the BPF object files at build time.
 /// The result is written to $OUT_DIR/bpf_hashes.rs as a static map
-/// that the runtime loader uses to verify integrity (T-6.5).
+/// that the runtime loader uses to verify integrity.
 ///
 /// If a .bpf.o file is absent at build time we record an empty hash
 /// — the loader will then accept any bytes, with a warning. This
@@ -33,8 +33,8 @@ fn main() {
         "network",
         "injection",
         "cred",
-        // LSM enforcement programs (T-0.9 + T-6.4): hashed for integrity
-        // verification at load time (H-2), even though they're opt-in.
+        // LSM enforcement programs are hashed for integrity verification
+        // at load time, even though they're opt-in.
         "selfprotect",
         "enforce_bpf",
         "enforce_kmod",

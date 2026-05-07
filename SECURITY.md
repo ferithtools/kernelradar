@@ -13,7 +13,7 @@ Use either of these private channels:
   advisory we can ship together with the fix.
 - **Email** — `ferithtools@users.noreply.github.com` (this is a
   GitHub-routed address; nothing fancy, no PGP key advertised yet —
-  T-15.6 in the backlog tracks adding one).
+  one will be added before v0.2).
 
 Please include, at minimum:
 
@@ -56,9 +56,8 @@ Findings we treat as security:
   tampered BPF object in `strict_mode = true`).
 - LSM enforcement holes (`enforce_bpf` / `enforce_kmod` /
   `selfprotect` letting through what they advertise blocking).
-- Information-disclosure surfaces — webhook URL leak (already
-  patched in H-4), config file world-read, baseline file world-read
-  (M-7 patched), pinned BPF map readability.
+- Information-disclosure surfaces — webhook URL leaks, config file
+  world-read, baseline file world-read, pinned BPF map readability.
 - Supply-chain attacks against the release artifacts (mismatch
   between in-repo SHA pin and shipped tarball is a security event;
   see [`release-checksums/`](release-checksums/)).

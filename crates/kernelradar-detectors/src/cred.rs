@@ -4,7 +4,7 @@
 // Part of the kernelradar project — Linux kernel anomaly detection via BPF.
 // See LICENSE for terms.
 
-/// Credential theft detector — T-0.8
+/// Credential theft detector.
 ///
 /// Watches read-only opens of credential files. The READ counterpart
 /// to FIM (which watches writes). Narrower path set to avoid noise.
@@ -126,7 +126,7 @@ impl CredDetector {
         verify_bpf("cred", &bytes)?;
         let mut bpf = Ebpf::load(&bytes).context("verifier rejected cred BPF")?;
 
-        // H-3: pin kr_stats for external tooling.
+        // Pin kr_stats for external tooling.
         if let Some(stats) = bpf.map_mut("kr_stats") {
             let _ = stats.pin("/sys/fs/bpf/kr_stats_cred");
         }

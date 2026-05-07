@@ -41,10 +41,10 @@ uuid = { version = "1", features = ["v7", "serde"] }
 anyhow  = "1"
 thiserror = "1"
 
-# Regex (used in allowlist matching, T-2.5)
+# Regex — allowlist matching.
 regex = "1"
 
-# HTTP client for webhook output (T-5.3)
+# HTTP client for webhook output.
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 
 # Time

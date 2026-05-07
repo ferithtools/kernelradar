@@ -4,7 +4,7 @@
 // Part of the kernelradar project — Linux kernel anomaly detection via BPF.
 // See LICENSE for terms.
 
-/// Process injection detector — T-0.7
+/// Process injection detector.
 ///
 /// Watches ptrace() ATTACH/SEIZE/POKE and process_vm_writev() —
 /// the three classic mechanisms for cross-process memory manipulation.
@@ -54,7 +54,7 @@ impl InjectionDetector {
         verify_bpf("injection", &bytes)?;
         let mut bpf = Ebpf::load(&bytes).context("verifier rejected injection BPF")?;
 
-        // H-3: pin kr_stats for external tooling.
+        // Pin kr_stats for external tooling.
         if let Some(stats) = bpf.map_mut("kr_stats") {
             let _ = stats.pin("/sys/fs/bpf/kr_stats_injection");
         }

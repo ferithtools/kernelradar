@@ -31,7 +31,7 @@ All tests use the production daemon installed via `make install`,
 running as a systemd service in `--format=journald` mode. No
 artificial helpers in BPF or userspace code paths.
 
-### T-7.1: BPF tracepoint throughput
+### BPF tracepoint throughput
 
 Configured rate limiter to a no-op (`window_max = 1_000_000`) so we
 measure raw kernel-side observation rate.
@@ -66,10 +66,10 @@ real attack scenario you'd see at most 100s of events/sec, all of
 which userspace handles comfortably.
 
 The drops are visible via `kernelradar_*_dropped_total` Prometheus
-counters (T-7.3) — this is operationally important: an admin can
+counters — this is operationally important: an admin can
 distinguish "no attacks detected" from "we're losing events".
 
-### T-7.7: Graceful shutdown
+### Graceful shutdown
 
 ```bash
 $ time systemctl stop kernelradar
@@ -87,7 +87,7 @@ $ bpftool prog show | grep -c kr_tp_
 Aya's `Drop` impl detaches every program before the userspace process
 exits. No leaked BPF programs, no leaked maps.
 
-### T-7.5: Memory profile
+### Memory profile
 
 ```
 $ cat /proc/$(pidof kernelradar)/status | grep -E '^Vm'
@@ -106,7 +106,7 @@ The 137 MB peak under a 320k events/sec flood is dominated by:
 After the flood subsides, RSS returns to its 80 MB baseline.
 **There is no leak under load.**
 
-### T-7.4: CPU profile
+### CPU profile
 
 Under steady-state idle (no events): kernelradar consumes <0.1% of
 one core. Under 100k/sec flood: ~28% of one core. Profiling shows
@@ -121,10 +121,10 @@ For deployments that don't need exe paths, setting
 `RUST_LOG=...,kernelradar.alert=warn` removes ~15% of CPU work
 on the alert hot path (informational events skipped).
 
-### T-7.6: Soak observations
+### Soak observations
 
-Daemon ran for >1 hour during the development of T-1..T-6 across
-multiple flood tests, configuration reloads, baseline saves, and
+Daemon ran for >1 hour across multiple flood tests, configuration
+reloads, baseline saves, and
 SIGHUP cycles. Memory remained at 65–80 MB. CPU returned to <1%
 within seconds of any load event.
 
@@ -137,7 +137,7 @@ For longer soaks (24+ hours) you'd want to watch:
 
 | Tool        | Idle RSS | BPF programs | Adaptive baseline |
 |-------------|----------|--------------|-------------------|
-| kernelradar | 80 MB    | 12           | yes (T-4)         |
+| kernelradar | 80 MB    | 12           | yes               |
 | Falco       | ~200 MB  | 50+          | no                |
 | Tetragon    | ~500 MB  | 30+          | no                |
 | Tracee      | ~300 MB  | 25+          | no                |

@@ -34,7 +34,7 @@ kernelradar_alerts_total{detector="container",severity="WARNING"} 117
 # TYPE kernelradar_bursts_total counter
 kernelradar_bursts_total{detector="privesc"} 2
 
-# HELP kernelradar_anomalies_total Statistical anomalies (T-4)
+# HELP kernelradar_anomalies_total Statistical anomalies
 # TYPE kernelradar_anomalies_total counter
 kernelradar_anomalies_total{detector="privesc"} 5
 
