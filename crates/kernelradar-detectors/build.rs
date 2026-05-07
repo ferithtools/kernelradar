@@ -83,12 +83,14 @@ pub const BPF_HASHES: &[(&str, &str)] = &[
 }
 
 fn chrono_now() -> String {
-    // Avoid pulling chrono into build deps — use SystemTime.
+    // Avoid pulling chrono into build deps — use SystemTime. A clock skewed
+    // back before the epoch would not be a fatal build error, just an
+    // uninformative timestamp string.
     use std::time::{SystemTime, UNIX_EPOCH};
     let secs = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_secs();
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
     format!("epoch {secs}")
 }
 
@@ -131,7 +133,15 @@ fn sha256_bytes(data: &[u8]) -> [u8; 32] {
     for chunk in padded.chunks_exact(64) {
         let mut w = [0u32; 64];
         for i in 0..16 {
-            w[i] = u32::from_be_bytes(chunk[i * 4..i * 4 + 4].try_into().unwrap());
+            // chunks_exact(64) guarantees a 64-byte slice, so [i*4..i*4+4]
+            // for i in 0..16 always yields 4 bytes. Indexing directly avoids
+            // a `try_into().unwrap()` round-trip.
+            w[i] = u32::from_be_bytes([
+                chunk[i * 4],
+                chunk[i * 4 + 1],
+                chunk[i * 4 + 2],
+                chunk[i * 4 + 3],
+            ]);
         }
         for i in 16..64 {
             let s0 = w[i - 15].rotate_right(7) ^ w[i - 15].rotate_right(18) ^ (w[i - 15] >> 3);

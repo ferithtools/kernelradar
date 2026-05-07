@@ -206,8 +206,13 @@ impl FimDetector {
     }
 
     fn handle(&self, ev: &KrEvent) {
-        // Path is packed in data[0..4] as 32 raw bytes (NUL-terminated)
-        let path_bytes: [u8; 32] = unsafe { std::mem::transmute(ev.data) };
+        // Path is packed into data[0..4] as 32 NUL-terminated raw bytes by
+        // the BPF side. Reassemble word-by-word — same native endianness as
+        // the BPF write, no `unsafe` needed.
+        let mut path_bytes = [0u8; 32];
+        for (i, word) in ev.data.iter().enumerate() {
+            path_bytes[i * 8..(i + 1) * 8].copy_from_slice(&word.to_ne_bytes());
+        }
         let path = String::from_utf8_lossy(path_bytes.split(|&b| b == 0).next().unwrap_or(&[]))
             .to_string();
 
