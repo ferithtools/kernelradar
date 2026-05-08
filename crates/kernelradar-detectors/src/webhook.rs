@@ -44,8 +44,19 @@ pub fn init(config: WebhookConfig) {
     if !config.enabled || config.url.is_empty() {
         return;
     }
+    // Disable redirect-following entirely. Default reqwest policy
+    // chases up to 10 redirects, which lets a compromised collector
+    // (or a misconfigured DNS record) issue 302 -> 169.254.169.254
+    // and exfiltrate alert payloads to cloud-metadata or any
+    // private-network destination. The SSRF guard in
+    // kernelradar_core::config::webhook_url_security_issue runs at
+    // config-validate time and only checks the configured URL; it
+    // cannot vet runtime redirect targets. Webhook output is a
+    // direct POST to a known endpoint, so redirects have no
+    // legitimate use here.
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(config.timeout_secs))
+        .redirect(reqwest::redirect::Policy::none())
         .user_agent("kernelradar-webhook/0.1")
         .build()
         .expect("reqwest client");
