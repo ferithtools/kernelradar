@@ -266,12 +266,92 @@ fn emit_burst_marker(orig: &Alert) {
 }
 
 fn emit_plain(alert: &Alert) {
-    println!("{alert}");
+    // Sanitise every attacker-controllable field before printing to a
+    // tty. `comm` is set by the source process via prctl(PR_SET_NAME)
+    // and can contain ESC, CR, NL, VT etc; `title` carries that
+    // `comm` plus user-supplied paths (FIM/cred event_type=2) that
+    // bypass the rule table. An admin tailing the log in a real
+    // terminal would otherwise see the attacker's ANSI escape
+    // sequence (`\x1b[2J\x1b[H` clears the screen, `\x1b]0;...\x07`
+    // rewrites the title bar) and `\n`-injected fake log lines that
+    // appear to come from kernelradar itself. JSON / journald /
+    // Falco modes escape automatically; only the plain-text tty
+    // path needs this.
+    println!(
+        "[{}] {} | {} | pid={} uid={} comm={} | {} | cid={}",
+        alert.severity,
+        alert.timestamp.format("%Y-%m-%dT%H:%M:%S%.3fZ"),
+        alert.detector,
+        alert.pid,
+        alert.uid,
+        sanitize_for_tty(&alert.comm),
+        sanitize_for_tty(&alert.title),
+        alert.correlation_id,
+    );
     if !alert.description.is_empty() {
-        println!("          └ {}", alert.description);
+        println!("          └ {}", sanitize_for_tty(&alert.description));
     }
     if alert.context != serde_json::Value::Null {
+        // `to_string()` on a serde_json::Value produces a JSON string
+        // literal where control chars are already escaped as \uXXXX.
+        // Print as-is.
         println!("          └ {}", alert.context);
+    }
+}
+
+/// Replace every ASCII control character (except plain space) with
+/// `\xHH` notation so the result is safe to splat into a terminal.
+/// Avoids ANSI escape sequence smuggling via `comm` /
+/// path / title fields.
+fn sanitize_for_tty(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for ch in s.chars() {
+        if ch == ' ' || !ch.is_control() {
+            out.push(ch);
+        } else {
+            out.push_str(&format!("\\x{:02x}", ch as u32));
+        }
+    }
+    out
+}
+
+#[cfg(test)]
+mod sanitize_tty_tests {
+    use super::sanitize_for_tty as s;
+
+    #[test]
+    fn passes_normal_text() {
+        assert_eq!(s("hello world"), "hello world");
+        assert_eq!(s("/etc/shadow"), "/etc/shadow");
+    }
+
+    #[test]
+    fn escapes_ansi_clear_screen() {
+        // \x1b[2J\x1b[H = clear-screen + home cursor
+        assert_eq!(s("\x1b[2J\x1b[H"), "\\x1b[2J\\x1b[H");
+    }
+
+    #[test]
+    fn escapes_newline_and_carriage_return() {
+        assert_eq!(s("foo\nbar\rbaz"), "foo\\x0abar\\x0dbaz");
+    }
+
+    #[test]
+    fn escapes_terminal_title_setter() {
+        // OSC 0 ; <title> BEL - rewrites terminal title in xterm/iTerm2
+        assert_eq!(s("\x1b]0;FAKE\x07"), "\\x1b]0;FAKE\\x07");
+    }
+
+    #[test]
+    fn escapes_ansi_color_codes() {
+        // \x1b[31mRED\x1b[0m
+        assert_eq!(s("\x1b[31mRED\x1b[0m"), "\\x1b[31mRED\\x1b[0m");
+    }
+
+    #[test]
+    fn keeps_unicode() {
+        assert_eq!(s("привет"), "привет");
+        assert_eq!(s("résumé"), "résumé");
     }
 }
 
