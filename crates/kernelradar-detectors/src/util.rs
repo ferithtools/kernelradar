@@ -53,58 +53,10 @@ pub fn read_exe_path_verified(pid: u32, ev_comm: &str) -> Option<String> {
         .map(|p| p.to_string_lossy().to_string())
 }
 
-/// Check whether a process is in the allowlist.
-///
-/// Each allowlist entry is matched in this order:
-///   • `/regex/`           - Rust regex against comm, basename(exe), exe
-///   • exact comm match    - string equality with `comm` (16-char limit)
-///   • exact exe match     - full path equality with `exe`
-///   • exact basename match - equality with last path segment of `exe`
-///
-/// Prefix matching is intentionally NOT supported here. An earlier
-/// version matched on `comm.starts_with(entry)`, which let `"sshd"`
-/// allowlist `"sshooly-rev-shell"`. Use `/^prefix.*/` regex when you
-/// need prefix semantics.
-pub fn is_allowed(comm: &str, exe: Option<&str>, allowlist: &[String]) -> bool {
-    let exe_basename = exe.and_then(|p| p.rsplit('/').next());
-
-    for entry in allowlist {
-        // Regex: /pattern/
-        if let Some(pat) = entry.strip_prefix('/').and_then(|s| s.strip_suffix('/')) {
-            // Compile once per call. Bad regex is silently ignored
-            // (validate at config load time via Config::validate).
-            if let Ok(re) = regex::Regex::new(pat) {
-                if re.is_match(comm) {
-                    return true;
-                }
-                if let Some(b) = exe_basename {
-                    if re.is_match(b) {
-                        return true;
-                    }
-                }
-                if let Some(p) = exe {
-                    if re.is_match(p) {
-                        return true;
-                    }
-                }
-            }
-            continue;
-        }
-
-        if entry == comm {
-            return true;
-        }
-        if let Some(p) = exe {
-            if p == entry.as_str() {
-                return true;
-            }
-            if exe_basename == Some(entry.as_str()) {
-                return true;
-            }
-        }
-    }
-    false
-}
+// `is_allowed` was moved to `crate::allowlist::CompiledAllowlist::is_allowed`
+// where the regex set is pre-compiled at allowlist build / hot-reload
+// time instead of per event. Detectors call `al.is_allowed(comm, exe)`
+// directly on the snapshot returned by `SharedAllowlist::snapshot()`.
 
 /// Build an Alert from a BPF event. `detector` is a string literal kept
 /// as `&'static str` to avoid per-event allocation through the alert

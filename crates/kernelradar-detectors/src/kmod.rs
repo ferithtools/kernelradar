@@ -8,7 +8,7 @@ use anyhow::Result;
 
 use crate::allowlist::SharedAllowlist;
 use crate::runtime::TracepointDetector;
-use crate::util::{comm_str, is_allowed, make_alert, print_alert, read_exe_path_verified};
+use crate::util::{comm_str, make_alert, print_alert, read_exe_path_verified};
 use kernelradar_core::event::KrEvent;
 
 pub struct KmodDetector {
@@ -42,7 +42,7 @@ impl KmodDetector {
         let comm = comm_str(ev);
         let exe = read_exe_path_verified(ev.pid, &comm);
         let al = self.allowlist.snapshot();
-        if is_allowed(&comm, exe.as_deref(), &al) {
+        if al.is_allowed(&comm, exe.as_deref()) {
             return;
         }
 
