@@ -136,22 +136,30 @@ impl RateLimiter {
         let cfg = self.config;
 
         // Cap the state map. If we are about to insert a brand-new key
-        // and we are already at `keys_max`, evict the entry with the
-        // oldest `last_emitted` first - that's the LRU under the
-        // "alerts that fired recently are more interesting" model.
-        // Linear scan is O(N) but only fires on growth; steady state
-        // pays nothing.
+        // and we are already at `keys_max`, evict an old entry first.
+        //
+        // Approximated LRU: take the first SAMPLE_K entries the
+        // HashMap iterator yields (Rust's stdlib HashMap uses a
+        // randomised hasher, so for an attacker who does not know
+        // the seed this is effectively a random sample), pick the
+        // one with the oldest `last_emitted`, drop it. Eviction is
+        // O(K) regardless of state size; under adversarial PR_SET_NAME
+        // churn we drop one approximately-LRU entry per new insert
+        // and never block the global Mutex on an O(N) min_by_key
+        // walk.
+        const SAMPLE_K: usize = 8;
         if self.state.len() >= cfg.keys_max && !self.state.contains_key(&key) {
-            if let Some(oldest_key) = self
+            if let Some(victim) = self
                 .state
                 .iter()
+                .take(SAMPLE_K)
                 .min_by_key(|(_, st)| st.last_emitted)
                 .map(|(k, _)| k.clone())
             {
-                self.state.remove(&oldest_key);
+                self.state.remove(&victim);
                 tracing::debug!(
                     cap = cfg.keys_max,
-                    "rate limiter: evicted stale key to stay under cap"
+                    "rate limiter: evicted approximate-LRU key (sample of {SAMPLE_K})"
                 );
             }
         }
