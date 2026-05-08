@@ -430,78 +430,9 @@ mod tests {
         }
     }
 
-    // ── is_allowed ───────────────────────────────────────────────────
-
-    #[test]
-    fn is_allowed_empty_list_rejects_all() {
-        assert!(!is_allowed("anything", None, &[]));
-        assert!(!is_allowed("anything", Some("/usr/bin/anything"), &[]));
-    }
-
-    #[test]
-    fn is_allowed_exact_comm() {
-        let al = vec!["sshd".to_string()];
-        assert!(is_allowed("sshd", None, &al));
-        assert!(!is_allowed("ssh", None, &al));
-        // Prefix matching is intentionally rejected - "sshooly-rev-shell"
-        // must not sneak past an "sshd" allowlist via comm.starts_with.
-        assert!(!is_allowed("sshd-session", None, &al));
-        assert!(!is_allowed("sshooly", None, &al));
-    }
-
-    #[test]
-    fn is_allowed_prefix_via_regex() {
-        // Prefix semantics now require an explicit regex.
-        let al = vec!["/^python/".to_string()];
-        assert!(is_allowed("python3", None, &al));
-        assert!(is_allowed("python3.11", None, &al));
-        assert!(!is_allowed("py", None, &al));
-    }
-
-    #[test]
-    fn is_allowed_exact_exe_path() {
-        let al = vec!["/usr/bin/sudo".to_string()];
-        assert!(is_allowed("foo", Some("/usr/bin/sudo"), &al));
-        assert!(!is_allowed("foo", Some("/usr/local/sudo"), &al));
-    }
-
-    #[test]
-    fn is_allowed_exe_basename() {
-        let al = vec!["sudo".to_string()];
-        assert!(is_allowed("ssh-agent", Some("/usr/bin/sudo"), &al));
-    }
-
-    #[test]
-    fn is_allowed_regex_on_comm() {
-        let al = vec!["/^kworker/".to_string()];
-        assert!(is_allowed("kworker/0:1", None, &al));
-        assert!(is_allowed("kworker/u8:0-events", None, &al));
-        assert!(!is_allowed("worker", None, &al));
-    }
-
-    #[test]
-    fn is_allowed_regex_on_exe_basename() {
-        let al = vec!["/.*-agent$/".to_string()];
-        assert!(is_allowed("foo", Some("/usr/bin/ssh-agent"), &al));
-    }
-
-    #[test]
-    fn is_allowed_invalid_regex_does_not_panic() {
-        let al = vec!["/[unclosed/".to_string(), "actual-comm".to_string()];
-        assert!(is_allowed("actual-comm", None, &al));
-        assert!(!is_allowed("random", None, &al));
-    }
-
-    #[test]
-    fn is_allowed_mixed_entries() {
-        let al = vec![
-            "/^k/".to_string(),
-            "sudo".to_string(),
-            "/usr/bin/sshd".to_string(),
-        ];
-        assert!(is_allowed("kworker", None, &al));
-        assert!(is_allowed("sudo", None, &al));
-        assert!(is_allowed("any", Some("/usr/bin/sshd"), &al));
-        assert!(!is_allowed("apache", Some("/usr/sbin/apache2"), &al));
-    }
+    // is_allowed coverage moved to crate::allowlist::tests when the
+    // free function was replaced by CompiledAllowlist::is_allowed
+    // (see KR-20). Rerun those there:
+    //
+    //   cargo test -p kernelradar-detectors allowlist::tests
 }

@@ -18,6 +18,15 @@ use std::sync::{Arc, RwLock};
 
 use regex::RegexSet;
 
+/// Empty `RegexSet` used as a fallback when an allowlist hot-reload
+/// fails to compile. Constructed from an empty slice so the
+/// turbofish dance between `IntoIterator` and `AsRef<str>` stays
+/// out of the call site.
+fn empty_regex_set() -> RegexSet {
+    let empty: Vec<&str> = Vec::new();
+    RegexSet::new(empty).expect("empty RegexSet always builds")
+}
+
 /// Pre-compiled view of an allowlist.
 ///
 /// Built once per `replace()` call; dispatched on every event.
@@ -42,14 +51,14 @@ impl CompiledAllowlist {
                 exact.insert(e.clone());
             }
         }
-        let regex = RegexSet::new(&patterns).unwrap_or_else(|err| {
+        let regex = RegexSet::new(patterns).unwrap_or_else(|err| {
             // Bad regex was already caught by Config::validate at
             // startup; if we hit this branch on hot-reload, log the
             // bad pattern and fall back to an empty set so the
             // exact-string portion still works.
             tracing::warn!(error = %err,
                 "allowlist: regex compile failed during reload, regex matches disabled");
-            RegexSet::new::<&str, _>(std::iter::empty()).expect("empty RegexSet always builds")
+            empty_regex_set()
         });
         Self { exact, regex }
     }
@@ -178,5 +187,36 @@ mod tests {
         // allowlist that matches nothing on the regex side.
         let a = al(&["/[(/"]);
         assert!(!a.is_allowed("anything", None));
+    }
+
+    #[test]
+    fn regex_on_exe_basename() {
+        let a = al(&["/.*-agent$/"]);
+        assert!(a.is_allowed("foo", Some("/usr/bin/ssh-agent")));
+        assert!(!a.is_allowed("foo", Some("/usr/bin/sshd")));
+    }
+
+    #[test]
+    fn regex_on_comm_kworker() {
+        let a = al(&["/^kworker/"]);
+        assert!(a.is_allowed("kworker/0:1", None));
+        assert!(a.is_allowed("kworker/u8:0-events", None));
+        assert!(!a.is_allowed("worker", None));
+    }
+
+    #[test]
+    fn empty_list_rejects_all() {
+        let a = al(&[]);
+        assert!(!a.is_allowed("anything", None));
+        assert!(!a.is_allowed("anything", Some("/usr/bin/anything")));
+    }
+
+    #[test]
+    fn mixed_entries() {
+        let a = al(&["/^k/", "sudo", "/usr/bin/sshd"]);
+        assert!(a.is_allowed("kworker", None));
+        assert!(a.is_allowed("sudo", None));
+        assert!(a.is_allowed("any", Some("/usr/bin/sshd")));
+        assert!(!a.is_allowed("apache", Some("/usr/sbin/apache2")));
     }
 }
