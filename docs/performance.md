@@ -20,7 +20,7 @@ to publish here.
 |--------|-------|
 | **Sustained event rate (BPF tracepoint)** | **321 000 events/sec** |
 | **Userspace processed rate**              | ~25 000 events/sec |
-| **Idle RSS**                              | 65–80 MB |
+| **Idle RSS**                              | 65 to 80 MB |
 | **RSS peak (HWM under 100k flood)**       | 136 MB |
 | **Memory growth after 100k flood**        | 0 bytes |
 | **Graceful shutdown time**                | 641 ms (12 BPF programs detached) |
@@ -38,9 +38,9 @@ Configured rate limiter to a no-op (`window_max = 1_000_000`) so we
 measure raw kernel-side observation rate.
 
 ```bash
-# Generate 100 000 setuid(0) calls from rpn (uid=1000) across 4 workers
+# Generate 100 000 setuid(0) calls from a non-root user (uid=1000) across 4 workers
 for w in 1 2 3 4; do
-  sudo -u rpn python3 -c '
+  sudo -u testuser python3 -c '
     import os
     for _ in range(25_000):
         try: os.setuid(0)
@@ -126,7 +126,7 @@ on the alert hot path (informational events skipped).
 
 Daemon ran for >1 hour across multiple flood tests, configuration
 reloads, baseline saves, and
-SIGHUP cycles. Memory remained at 65–80 MB. CPU returned to <1%
+SIGHUP cycles. Memory remained at 65 to 80 MB. CPU returned to <1%
 within seconds of any load event.
 
 For longer soaks (24+ hours) you'd want to watch:

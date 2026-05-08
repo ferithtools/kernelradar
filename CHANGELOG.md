@@ -196,7 +196,7 @@ On the lowest-spec officially-supported hardware (Celeron J4125 @
 
 - Sustained event rate: **321 000 events/sec** (BPF tracepoint,
   kernel-side).
-- Idle resident memory: **65–80 MB**.
+- Idle resident memory: **65 to 80 MB**.
 - Peak RSS under a 100 000-event burst: **136 MB**, returning to
   the 80 MB baseline (no leak).
 - CPU at idle: **< 0.1 %** of one core.

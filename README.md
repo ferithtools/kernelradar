@@ -146,7 +146,7 @@ Linux kernel 6.13.9 · Debian 12.
 | Metric | Value |
 |---|---|
 | Sustained event rate (BPF tracepoint, kernel-side) | **321 000 events/sec** |
-| Idle resident memory (RSS) | **65–80 MB** |
+| Idle resident memory (RSS) | **65 to 80 MB** |
 | RSS peak under a 100 000-event burst | 136 MB |
 | Memory growth after burst returns to idle | **0 bytes** |
 | CPU at idle | <0.1 % of one core |
