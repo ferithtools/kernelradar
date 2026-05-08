@@ -161,9 +161,13 @@ fn load_lsm(path: &str, btf: &Btf, detector: &str, prog_name: &'static str) -> R
 fn load_selfprotect(path: &str, btf: &Btf) -> Result<Ebpf> {
     let mut bpf = load_lsm(path, btf, "selfprotect", "kr_task_kill")?;
 
-    // Populate the protected TGID with our own pid (since this process
-    // is the BPF orchestrator, our tgid equals the daemon's tgid).
-    let tgid = std::process::id();
+    // Populate the protected TGID with our HOST pid. The BPF hook
+    // reads `BPF_CORE_READ(p, tgid)`, which is the global init-namespace
+    // tgid on `task_struct`. If we run inside a pid namespace and use
+    // `std::process::id()` (namespace-local pid, often 1), the values
+    // never match and selfprotect silently does nothing. Read NSpid
+    // from /proc/self/status; the LAST field is the global pid.
+    let tgid = host_tgid();
     let map = bpf
         .take_map("kr_protected_tgid")
         .context("kr_protected_tgid map missing")?;
@@ -276,6 +280,53 @@ fn load_kmod_enforce(path: &str, btf: &Btf, allowlist: &[String]) -> Result<Ebpf
     let mut hm: HashMap<MapData, [u8; 16], u8> = HashMap::try_from(map)?;
     populate_comm_allowlist(&mut hm, allowlist, "kmod_allowlist")?;
     Ok(bpf)
+}
+
+/// Return the daemon's host (init-namespace) tgid. `std::process::id()`
+/// returns the namespace-local pid, which is often 1 inside a
+/// container - selfprotect's BPF hook reads the global tgid off
+/// `task_struct`, so the two would never match.
+///
+/// `/proc/self/status` carries an `NSpid:` line listing the pid in
+/// every namespace, leftmost first (host) and rightmost last
+/// (innermost namespace). When unsupported (kernels < 4.1) the field
+/// is absent and we fall back to `std::process::id()` with a
+/// warning - selfprotect may still be a no-op on that path but at
+/// least the operator will see the warning.
+fn host_tgid() -> u32 {
+    let status = match std::fs::read_to_string("/proc/self/status") {
+        Ok(s) => s,
+        Err(e) => {
+            tracing::warn!(error = %e,
+                "selfprotect: cannot read /proc/self/status, using std::process::id()");
+            return std::process::id();
+        }
+    };
+    for line in status.lines() {
+        if let Some(rest) = line.strip_prefix("NSpid:") {
+            // Tab-separated list of numeric pids, leftmost is host.
+            if let Some(first) = rest.split_whitespace().next() {
+                if let Ok(n) = first.parse::<u32>() {
+                    let local = std::process::id();
+                    if n != local {
+                        tracing::warn!(
+                            host_tgid = n,
+                            local_pid = local,
+                            "selfprotect: daemon is in a non-root pid namespace; \
+                             using host tgid for the protected_tgid map"
+                        );
+                    }
+                    return n;
+                }
+            }
+        }
+    }
+    tracing::warn!(
+        "selfprotect: /proc/self/status has no NSpid: field, \
+         falling back to std::process::id() - selfprotect may be a no-op \
+         if the daemon is pid-namespaced"
+    );
+    std::process::id()
 }
 
 /// Insert each allowlist entry into the BPF comm-keyed map.
