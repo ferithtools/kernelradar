@@ -439,6 +439,10 @@ pub fn webhook_url_security_issue(url: &str) -> Option<String> {
     } else {
         host.split(':').next().unwrap_or(host)
     };
+    // Trim a trailing dot - DNS-resolvable absolute names like
+    // "localhost." are common URL inputs and would otherwise sneak
+    // past the BLOCKED_HOSTNAMES exact-string check.
+    let host = host.trim_end_matches('.');
 
     const BLOCKED_HOSTNAMES: &[&str] = &[
         "localhost",
@@ -455,20 +459,19 @@ pub fn webhook_url_security_issue(url: &str) -> Option<String> {
     }
 
     if let Ok(v4) = host.parse::<Ipv4Addr>() {
-        let o = v4.octets();
-        if v4.is_loopback() {
-            return Some("loopback IPv4 (127.0.0.0/8)".into());
-        }
-        if v4.is_private() {
-            return Some("RFC1918 private IPv4".into());
-        }
-        if v4.is_link_local() {
-            return Some("link-local IPv4 (169.254.0.0/16, includes cloud metadata)".into());
-        }
-        if o[0] == 0 || v4.is_broadcast() || v4.is_multicast() || v4.is_unspecified() {
-            return Some("non-routable IPv4".into());
+        if let Some(reason) = ipv4_security_issue(v4) {
+            return Some(reason);
         }
     } else if let Ok(v6) = host.parse::<Ipv6Addr>() {
+        // Resolve IPv4-mapped IPv6 (`::ffff:127.0.0.1` and friends)
+        // into their IPv4 form so the IPv4 ranges still apply. Without
+        // this an attacker could write `[::ffff:169.254.169.254]` and
+        // bypass every IPv4 check.
+        if let Some(mapped) = v6.to_ipv4_mapped() {
+            if let Some(reason) = ipv4_security_issue(mapped) {
+                return Some(format!("IPv4-mapped IPv6 with {reason}"));
+            }
+        }
         if v6.is_loopback() {
             return Some("loopback IPv6 (::1)".into());
         }
@@ -482,6 +485,30 @@ pub fn webhook_url_security_issue(url: &str) -> Option<String> {
         if seg0 & 0xfe00 == 0xfc00 {
             return Some("unique-local IPv6 (fc00::/7)".into());
         }
+    }
+    None
+}
+
+fn ipv4_security_issue(v4: std::net::Ipv4Addr) -> Option<String> {
+    let o = v4.octets();
+    if v4.is_loopback() {
+        return Some("loopback IPv4 (127.0.0.0/8)".into());
+    }
+    if v4.is_private() {
+        return Some("RFC1918 private IPv4".into());
+    }
+    if v4.is_link_local() {
+        return Some("link-local IPv4 (169.254.0.0/16, includes cloud metadata)".into());
+    }
+    // CGNAT / shared-address space - 100.64.0.0/10 (RFC 6598). Not in
+    // Ipv4Addr::is_private. Some hyperscalers route internal links
+    // through this range; an exfiltration attempt against an internal
+    // collector would otherwise look "public" to the syntactic guard.
+    if o[0] == 100 && (o[1] & 0xc0) == 0x40 {
+        return Some("CGNAT shared-address IPv4 (100.64.0.0/10, RFC 6598)".into());
+    }
+    if o[0] == 0 || v4.is_broadcast() || v4.is_multicast() || v4.is_unspecified() {
+        return Some("non-routable IPv4".into());
     }
     None
 }
@@ -547,5 +574,39 @@ mod webhook_url_tests {
     fn handles_userinfo_and_port() {
         assert!(check("https://user:pass@127.0.0.1:8080/h").is_some());
         assert!(check("https://user@hooks.slack.com/x").is_none());
+    }
+
+    // KR-16 hardening: bypasses the first-pass guard missed.
+
+    #[test]
+    fn blocks_ipv4_mapped_ipv6_loopback() {
+        assert!(check("https://[::ffff:127.0.0.1]/h").is_some());
+        assert!(check("https://[::ffff:127.1.2.3]/h").is_some());
+    }
+
+    #[test]
+    fn blocks_ipv4_mapped_ipv6_metadata() {
+        assert!(check("https://[::ffff:169.254.169.254]/").is_some());
+    }
+
+    #[test]
+    fn blocks_ipv4_mapped_ipv6_rfc1918() {
+        assert!(check("https://[::ffff:10.0.0.1]/h").is_some());
+        assert!(check("https://[::ffff:192.168.1.1]/h").is_some());
+    }
+
+    #[test]
+    fn blocks_trailing_dot_localhost() {
+        assert!(check("https://localhost./h").is_some());
+        assert!(check("https://metadata.google.internal./").is_some());
+    }
+
+    #[test]
+    fn blocks_cgnat() {
+        assert!(check("https://100.64.0.1/h").is_some());
+        assert!(check("https://100.127.255.255/h").is_some());
+        // Just outside the range still allowed.
+        assert!(check("https://100.63.255.255/h").is_none());
+        assert!(check("https://100.128.0.0/h").is_none());
     }
 }
