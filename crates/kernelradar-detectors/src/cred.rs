@@ -19,8 +19,6 @@ use kernelradar_core::event::KrEvent;
 enum MatchKind {
     Exact,
     Prefix,
-    #[allow(dead_code)]
-    Contains,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -99,7 +97,6 @@ fn match_cred(path: &str) -> Option<&'static CredRule> {
     CRED_RULES.iter().find(|r| match r.kind {
         MatchKind::Exact => path == r.pattern,
         MatchKind::Prefix => path.starts_with(r.pattern),
-        MatchKind::Contains => path.contains(r.pattern),
     })
 }
 

@@ -503,10 +503,4 @@ mod tests {
             assert!(!s.contains('\0'));
         }
     }
-
-    // is_allowed coverage moved to crate::allowlist::tests when the
-    // free function was replaced by CompiledAllowlist::is_allowed
-    // (see KR-20). Rerun those there:
-    //
-    //   cargo test -p kernelradar-detectors allowlist::tests
 }

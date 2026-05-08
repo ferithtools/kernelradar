@@ -19,15 +19,18 @@ time, without trusting GitHub.
 ## How to verify a downloaded tarball
 
 ```bash
+VER=v0.1.1
+ARCH=linux-x86_64
+TARBALL="kernelradar-${VER#v}-${ARCH}.tar.gz"
+
 # 1. Pull the release.
-curl -fsSLO https://github.com/ferithtools/kernelradar/releases/download/v0.1.0/kernelradar-0.1.0-linux-x86_64.tar.gz
+curl -fsSLO "https://github.com/ferithtools/kernelradar/releases/download/${VER}/${TARBALL}"
 
 # 2. Pull the matching pin from this directory.
-EXPECTED=$(awk '{print $1}' \
-    https://raw.githubusercontent.com/ferithtools/kernelradar/v0.1.0/release-checksums/v0.1.0/kernelradar-0.1.0-linux-x86_64.tar.gz.sha256)
+EXPECTED=$(curl -fsSL "https://raw.githubusercontent.com/ferithtools/kernelradar/${VER}/release-checksums/${VER}/${TARBALL}.sha256" | awk '{print $1}')
 
 # 3. Compare.
-ACTUAL=$(sha256sum kernelradar-0.1.0-linux-x86_64.tar.gz | awk '{print $1}')
+ACTUAL=$(sha256sum "$TARBALL" | awk '{print $1}')
 if [ "$EXPECTED" = "$ACTUAL" ]; then
     echo "OK - tarball matches in-repo pin"
 else
@@ -39,8 +42,8 @@ fi
 After extracting, you can additionally verify every file inside:
 
 ```bash
-tar -xzf kernelradar-0.1.0-linux-x86_64.tar.gz
-( cd kernelradar-0.1.0-linux-x86_64 && sha256sum -c SHA256SUMS )
+tar -xzf "$TARBALL"
+( cd "kernelradar-${VER#v}-${ARCH}" && sha256sum -c SHA256SUMS )
 ```
 
 ## What's pinned per release
