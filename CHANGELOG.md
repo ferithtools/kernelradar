@@ -4,10 +4,70 @@ All notable changes to this project are documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.1.1] - 2026-05-08
 
-Post-publication polish on top of v0.1.0; no new features, no API
-changes a downstream user can observe.
+Security hardening release on top of v0.1.0. No new features, no
+API surface a downstream user can observe; the binary, the
+configuration schema, the systemd unit, and the BPF program names
+are all source-compatible with v0.1.0.
+
+### Security - second hardening pass (KR-01..26)
+
+A three-round red-team review of the v0.1.0 source closed 26
+findings. None of these were ever exploited in the wild; the
+project had no production users at v0.1.0 release. The fixes
+fall into four buckets:
+
+- **BPF integrity defaults (KR-01, KR-11, KR-12).** Integrity
+  strict-mode is on by default; an empty build-time hash is
+  treated as a refuse-to-load condition (it previously degraded
+  silently). The preflight checker warns when the BPF
+  installation directory is not owned by root or is group-/world-
+  writable. `config-cmd validate` documents that it does not
+  load BPF, only parse the TOML.
+- **Webhook SSRF surface (KR-09, KR-15, KR-16, KR-18, KR-23).**
+  The webhook URL validator now rejects loopback, RFC1918,
+  link-local, IPv4-mapped IPv6 loopback / RFC1918 / metadata,
+  inet_aton shortcuts (`https://0x7f000001`, `https://2130706433`),
+  and percent-encoded hosts (`https://%6c%6f%63%61%6c%68%6f%73%74`).
+  Redirect-following is disabled (`reqwest::redirect::Policy::none`)
+  so a malicious 302 response cannot bypass the syntactic check.
+  Inflight POSTs are capped by a `tokio::sync::Semaphore` so a
+  slow webhook endpoint cannot back up unbounded futures.
+- **State-store bounds and eviction (KR-05, KR-07, KR-13, KR-14,
+  KR-17, KR-21).** The rate-limiter and dedup tables are bounded
+  with sample-of-K approximate LRU eviction (no O(N) min scan
+  per insert). The adaptive baseline enforces `pairs_max` with a
+  10 % oldest-pair fall-through drop when normal `retain` evicts
+  nothing. Anomaly scoring requires a minimum bucket sample count
+  before the bucket's mean / sigma is used (defends against
+  drift-train attacks during warm-up). LSM allowlist entries
+  >15 bytes are refused (`TASK_COMM_LEN` is 16 incl. NUL, so a
+  longer entry would never match a real comm). The hostname is
+  cached on first use; the correlation-id generator switched to
+  UUID v4 so the bytes do not leak host time.
+- **Output, parsing, and self-protection hygiene (KR-02, KR-03,
+  KR-04, KR-06, KR-08, KR-10, KR-19, KR-20, KR-22, KR-24, KR-25,
+  KR-26).** systemd unit splits read-only `bpf/` from writable
+  `state/` via separate `BindReadOnlyPaths` / `BindPaths` entries.
+  `selfprotect` emits a CRITICAL alert per denied kill so the
+  block leaves an audit trail. Path traversal heuristic in `fim`
+  / `cred` requires a real parent-directory token (`/../` or
+  `/..\0`) so legitimate filenames like `/var/cache/...metadata`
+  do not false-positive. Plain-text output escapes ANSI control
+  sequences and the full Unicode bidi / format / line-separator
+  range so a hostile `comm` cannot rewrite a terminal session.
+  The Prometheus exporter has a request timeout and an inflight
+  cap. The allowlist pre-compiles its regex set into a single
+  DFA (no per-event `Regex::new`). `Config::validate` rejects
+  `NaN` / `Inf` / out-of-range values for `alpha`,
+  `score_threshold`, `learning_secs`, `save_interval_secs`,
+  `pairs_max`, `keys_max`, `window_secs`, `burst_window_secs`,
+  and `webhook.timeout_secs`. `selfprotect` resolves the daemon's
+  host TGID from `/proc/self/status` `NSpid:` so the LSM block
+  stays correct when the daemon is launched in a PID namespace.
+  `baseline.json` writes use `O_NOFOLLOW + O_EXCL + O_CREAT` to
+  defeat a symlink swap before the atomic rename.
 
 ### Changed - performance
 
@@ -72,12 +132,17 @@ changes a downstream user can observe.
 - Removed `rc/*.png` (1.3 MB of branding assets) from the source
   tree; logos are distributed via GitHub social-preview /
   release-asset settings instead.
+- Generated `crates/kernelradar-bpf/include/vmlinux.h` is in
+  `.gitignore`; it is dumped from `/sys/kernel/btf/vmlinux` at
+  build time and is kernel-version-specific (~3.3 MB).
+- CI bumped `actions/checkout` to v5 (Node.js 20 deprecation;
+  Node 24 is the supported runtime).
 
-The next planned **release** is the **v0.1.x** patch series (Q2
-2026) covering `--dry-run` / `--audit-only` enforcement, `kr_stats`
-counters in the Prometheus exporter, IPv6 destination CIDR
-allowlist, per-detector documentation, the email-integration
-recipe, and the first `.deb` package.
+The next planned release is the **v0.1.x** patch series covering
+`--dry-run` / `--audit-only` enforcement, `kr_stats` counters in
+the Prometheus exporter, IPv6 destination CIDR allowlist,
+per-detector documentation, the email-integration recipe, and the
+first `.deb` package.
 
 ## [v0.1.0] - 2026-05-07
 

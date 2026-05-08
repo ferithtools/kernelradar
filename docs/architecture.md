@@ -1,6 +1,6 @@
 # kernelradar: architecture
 
-This document describes how kernelradar v0.1.0 actually works on a
+This document describes how kernelradar v0.1.x actually works on a
 running host. Pair it with [`docs/threat-model.md`](threat-model.md)
 (what we defend against) and [`docs/hardening.md`](hardening.md)
 (how to harden a real deployment).

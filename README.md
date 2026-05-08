@@ -5,7 +5,7 @@
 
 [![License: GPL-2.0-only](https://img.shields.io/badge/License-GPL%20v2-blue.svg)](LICENSE)
 [![CI](https://github.com/ferithtools/kernelradar/actions/workflows/ci.yml/badge.svg)](https://github.com/ferithtools/kernelradar/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-v0.1.0--preview-orange.svg)](#)
+[![Version](https://img.shields.io/badge/version-v0.1.1-orange.svg)](#)
 [![Linux only](https://img.shields.io/badge/platform-linux--6.1%2B-lightgrey.svg)](#)
 
 ---
@@ -128,7 +128,7 @@ Pick something else when:
 - You need **IPv6 outbound monitoring today**: kernelradar's
   network detector is IPv4-only in v0.1; targeted for v0.1.x.
 - You need a **mature, multi-year track record**: kernelradar is
-  v0.1.0-preview. Pilot it before paging anyone.
+  v0.1.1. Pilot it before paging anyone.
 
 ---
 
@@ -164,17 +164,17 @@ Full methodology and a per-stage breakdown live in
 
 ```bash
 # 1. Pull the release tarball.
-curl -fsSLO https://github.com/ferithtools/kernelradar/releases/download/v0.1.0/kernelradar-0.1.0-linux-x86_64.tar.gz
+curl -fsSLO https://github.com/ferithtools/kernelradar/releases/download/v0.1.1/kernelradar-0.1.1-linux-x86_64.tar.gz
 
 # 2. Verify against the in-repo SHA-256 pin (so a compromised CDN
 #    can't slip you a tampered binary).
-EXPECTED=$(curl -fsSL https://raw.githubusercontent.com/ferithtools/kernelradar/v0.1.0/release-checksums/v0.1.0/kernelradar-0.1.0-linux-x86_64.tar.gz.sha256 | awk '{print $1}')
-ACTUAL=$(sha256sum kernelradar-0.1.0-linux-x86_64.tar.gz | awk '{print $1}')
+EXPECTED=$(curl -fsSL https://raw.githubusercontent.com/ferithtools/kernelradar/v0.1.1/release-checksums/v0.1.1/kernelradar-0.1.1-linux-x86_64.tar.gz.sha256 | awk '{print $1}')
+ACTUAL=$(sha256sum kernelradar-0.1.1-linux-x86_64.tar.gz | awk '{print $1}')
 [ "$EXPECTED" = "$ACTUAL" ] || { echo "TAMPERED - do not install"; exit 1; }
 
 # 3. Extract + run the bundled installer.
-tar -xzf kernelradar-0.1.0-linux-x86_64.tar.gz
-cd kernelradar-0.1.0-linux-x86_64
+tar -xzf kernelradar-0.1.1-linux-x86_64.tar.gz
+cd kernelradar-0.1.1-linux-x86_64
 sha256sum -c SHA256SUMS                  # verify each shipped file
 ./install.sh                              # binary, BPF objects, systemd unit, default config
 sudo systemctl enable --now kernelradar
@@ -343,8 +343,8 @@ Setting expectations honestly:
   at all in v0.1 (they don't alert, but they also don't show up). The
   destination CIDR allowlist is therefore IPv4-only too. Kernel-side IPv6
   hooks land in v0.2 (see roadmap).
-- **No release artifacts yet.** v0.1.0-preview is built from source. Debian /
-  RPM / OCI images land in v0.2 (see roadmap).
+- **Distribution is source + tarball.** v0.1.x ships a SHA-256-pinned
+  Linux x86_64 tarball; Debian / RPM / OCI images land in v0.2 (see roadmap).
 
 If any of those are deal-breakers, you probably want a commercial EDR or one
 of the larger CNCF tools. If they're acceptable trade-offs, read on.
@@ -449,7 +449,7 @@ attacker with root can and cannot do to this tool, see
 [`docs/threat-model.md`](docs/threat-model.md) and
 [`docs/hardening.md`](docs/hardening.md).
 
-**Reporting vulnerabilities:** see [`SECURITY.md`](SECURITY.md) (coming with v0.1.0).
+**Reporting vulnerabilities:** see [`SECURITY.md`](SECURITY.md).
 
 ---
 
@@ -468,8 +468,9 @@ closed-source proprietary forks.
 
 ## Contributing
 
-Issue and pull-request templates ship with v0.1.0; see
-[`CONTRIBUTING.md`](CONTRIBUTING.md) (coming).
+Issue and pull-request templates are in
+[`.github/`](.github/); see
+[`CONTRIBUTING.md`](CONTRIBUTING.md) for the workflow.
 
 Until then: open an issue describing what you'd like to change, and we'll
 figure it out from there.
