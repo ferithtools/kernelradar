@@ -52,10 +52,14 @@ static __always_inline int is_sensitive_prefix(const char *p)
 }
 
 /* Returns 1 if `p` (NUL-terminated, scanned up to `max` bytes)
- * contains a "/.." sequence. Useful as a low-cost traversal probe:
- * paths like "/var/lib/../../etc/shadow" pass is_sensitive_prefix=0
- * (they start with "/v") but are clearly trying to reach sensitive
- * directories. Manual unroll keeps the BPF verifier happy.
+ * contains a "/../" or "/..\0" sequence (parent-directory
+ * reference - i.e. a real path-traversal token, not just three
+ * arbitrary bytes). Earlier versions matched any `/`, `.`, `.`
+ * triple, which false-positived on filenames like
+ * "/var/cache/...metadata", "/srv/repo.git/...pack", or
+ * "/home/u/...build". Now we require the next byte to be a path
+ * separator or NUL terminator so that `..` actually means
+ * "parent dir" rather than the start of a longer filename.
  *
  * Limitations (see docs/threat-model.md):
  *   - chdir()+relative openat (path arg becomes "shadow") is NOT
@@ -69,12 +73,13 @@ static __always_inline int is_sensitive_prefix(const char *p)
 static __always_inline int contains_dotdot(const char *p, int max)
 {
     #pragma unroll
-    for (int i = 0; i < 30; i++) {
-        if (i + 2 >= max)
+    for (int i = 0; i < 29; i++) {
+        if (i + 3 >= max)
             return 0;
         if (p[i] == 0)
             return 0;
-        if (p[i] == '/' && p[i + 1] == '.' && p[i + 2] == '.')
+        if (p[i] == '/' && p[i + 1] == '.' && p[i + 2] == '.'
+            && (p[i + 3] == '/' || p[i + 3] == 0))
             return 1;
     }
     return 0;

@@ -53,19 +53,22 @@ static __always_inline int is_cred_candidate(const char *p)
 }
 
 /* Returns 1 if `p` (NUL-terminated, scanned up to `max` bytes)
- * contains a "/.." sequence. Useful as a low-cost traversal probe
- * - see fim.bpf.c for the rationale and the documented
- * limitations (chdir+relative, openat with dirfd, bind mounts).
+ * contains a "/../" or "/..\0" sequence (real parent-directory
+ * reference). See fim.bpf.c for the rationale - this version
+ * requires the byte after the second `.` to be a path separator
+ * or NUL so legitimate filenames like "/var/cache/...metadata"
+ * do not false-positive.
  */
 static __always_inline int contains_dotdot(const char *p, int max)
 {
     #pragma unroll
-    for (int i = 0; i < 30; i++) {
-        if (i + 2 >= max)
+    for (int i = 0; i < 29; i++) {
+        if (i + 3 >= max)
             return 0;
         if (p[i] == 0)
             return 0;
-        if (p[i] == '/' && p[i + 1] == '.' && p[i + 2] == '.')
+        if (p[i] == '/' && p[i + 1] == '.' && p[i + 2] == '.'
+            && (p[i + 3] == '/' || p[i + 3] == 0))
             return 1;
     }
     return 0;
