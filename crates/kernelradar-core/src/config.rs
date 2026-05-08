@@ -381,6 +381,57 @@ impl Config {
             }
         }
 
+        // Reject NaN / Inf / out-of-range floats and zero-caps. TOML 1.0
+        // accepts `nan`, `+inf`, `-inf` as float literals, and earlier
+        // versions silently degraded:
+        //   - score_threshold = nan → `z >= nan` always false → anomaly
+        //     detection silently disabled
+        //   - alpha <= 0 / > 1 → meaningless EWMA scoring
+        //   - keys_max = 0 / pairs_max = 0 → caps disabled, unbounded
+        //     state growth
+        //   - webhook.timeout_secs = 0 → "no timeout" → slow collector
+        //     pins MAX_INFLIGHT permits forever
+        if !self.baseline.alpha.is_finite()
+            || self.baseline.alpha <= 0.0
+            || self.baseline.alpha > 1.0
+        {
+            issues.push(format!(
+                "baseline.alpha = {} (expected 0.0 < alpha <= 1.0, finite)",
+                self.baseline.alpha
+            ));
+        }
+        if !self.baseline.score_threshold.is_finite() || self.baseline.score_threshold <= 0.0 {
+            issues.push(format!(
+                "baseline.score_threshold = {} (expected positive finite)",
+                self.baseline.score_threshold
+            ));
+        }
+        if self.baseline.learning_secs == 0 {
+            issues.push("baseline.learning_secs = 0 (expected > 0)".into());
+        }
+        if self.baseline.save_interval_secs == 0 {
+            issues.push("baseline.save_interval_secs = 0 (expected > 0)".into());
+        }
+        if self.baseline.pairs_max == 0 {
+            issues.push("baseline.pairs_max = 0 (cap disabled - expected > 0)".into());
+        }
+        if self.ratelimit.keys_max == 0 {
+            issues.push("ratelimit.keys_max = 0 (cap disabled - expected > 0)".into());
+        }
+        if self.ratelimit.window_secs == 0 {
+            issues.push("ratelimit.window_secs = 0 (expected > 0)".into());
+        }
+        if self.ratelimit.burst_window_secs == 0 {
+            issues.push("ratelimit.burst_window_secs = 0 (expected > 0)".into());
+        }
+        if self.webhook.enabled && self.webhook.timeout_secs == 0 {
+            issues.push(
+                "webhook.timeout_secs = 0 with enabled = true \
+                 (would let a slow collector pin all inflight permits forever)"
+                    .into(),
+            );
+        }
+
         issues
     }
 }
