@@ -444,6 +444,24 @@ pub fn webhook_url_security_issue(url: &str) -> Option<String> {
     // past the BLOCKED_HOSTNAMES exact-string check.
     let host = host.trim_end_matches('.');
 
+    // Refuse hosts that look like a Linux glibc inet_aton() shortcut
+    // - integer-form (`2130706433` = 127.0.0.1), hex (`0x7f000001`),
+    // octal (`017700000001`), or single zero (`0`). Ipv4Addr::from_str
+    // accepts only dotted-decimal and would let these pass; the OS
+    // resolver / hyper / reqwest accept them at runtime via inet_aton
+    // and route to the embedded address.
+    if host_is_inet_aton_shortcut(host) {
+        return Some("integer / octal / hex IP form not allowed (inet_aton shortcut)".into());
+    }
+    // Refuse percent-encoded hosts. The url crate / reqwest will
+    // percent-decode the host before resolution, so `%6c%6f%63%61%6c%68%6f%73%74`
+    // resolves as `localhost`. Defer to operators who genuinely need
+    // unicode hosts to use the punycode form (xn--...) which doesn't
+    // contain `%`.
+    if host.contains('%') {
+        return Some("percent-encoded host not allowed".into());
+    }
+
     const BLOCKED_HOSTNAMES: &[&str] = &[
         "localhost",
         "ip6-localhost",
@@ -487,6 +505,31 @@ pub fn webhook_url_security_issue(url: &str) -> Option<String> {
         }
     }
     None
+}
+
+/// True if `host` is a plain inet_aton-style numeric form that
+/// `Ipv4Addr::from_str` rejects but that glibc / hyper / reqwest
+/// accept at runtime: a single decimal integer (`2130706433`), an
+/// octal integer (`017700000001`, leading zero + only digits), or a
+/// hex integer (`0x7f000001`).
+///
+/// Pure DNS hostnames contain a letter or a `-` and so never match.
+/// Dotted-decimal (`127.0.0.1`) is left to `Ipv4Addr::from_str` and
+/// then to `ipv4_security_issue` which has the actual range checks.
+fn host_is_inet_aton_shortcut(host: &str) -> bool {
+    if host.is_empty() {
+        return false;
+    }
+    // Hex: `0x` / `0X` prefix.
+    if let Some(rest) = host.strip_prefix("0x").or_else(|| host.strip_prefix("0X")) {
+        return !rest.is_empty() && rest.chars().all(|c| c.is_ascii_hexdigit());
+    }
+    // Single integer or octal. No dots allowed - dotted forms parse
+    // as Ipv4Addr and go through ipv4_security_issue instead.
+    if host.contains('.') {
+        return false;
+    }
+    host.chars().all(|c| c.is_ascii_digit())
 }
 
 fn ipv4_security_issue(v4: std::net::Ipv4Addr) -> Option<String> {
@@ -608,5 +651,43 @@ mod webhook_url_tests {
         // Just outside the range still allowed.
         assert!(check("https://100.63.255.255/h").is_none());
         assert!(check("https://100.128.0.0/h").is_none());
+    }
+
+    // KR-23: inet_aton shortcuts and percent-encoding.
+
+    #[test]
+    fn blocks_integer_form_ipv4() {
+        // 2130706433 = 127.0.0.1
+        assert!(check("https://2130706433/hook").is_some());
+        // 0 - "any address" routes to localhost on Linux.
+        assert!(check("https://0/").is_some());
+    }
+
+    #[test]
+    fn blocks_hex_form_ipv4() {
+        assert!(check("https://0x7f000001/").is_some());
+        assert!(check("https://0X7F000001/").is_some());
+    }
+
+    #[test]
+    fn blocks_octal_form_ipv4() {
+        // Leading zero + only digits = octal in inet_aton's eyes.
+        assert!(check("https://017700000001/").is_some());
+    }
+
+    #[test]
+    fn blocks_percent_encoded_host() {
+        // `%6c%6f%63%61%6c%68%6f%73%74` decodes to `localhost`.
+        assert!(check("https://%6c%6f%63%61%6c%68%6f%73%74/").is_some());
+    }
+
+    #[test]
+    fn allows_dns_names_with_digits_when_dotted() {
+        // Public IPv4 dotted form must still pass.
+        assert!(check("https://203.0.113.5/hook").is_none());
+        // DNS names containing digits but at least one letter fall
+        // through (no IPv4-shortcut match because of the letter).
+        assert!(check("https://api2.example.com/x").is_none());
+        assert!(check("https://h1.h2.example.org/x").is_none());
     }
 }
