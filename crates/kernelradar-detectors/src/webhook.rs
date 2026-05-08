@@ -9,10 +9,20 @@
 /// Async fire-and-forget: each alert spawns a non-blocking POST.
 /// On failure: log and drop. We never let an HTTP backend slow down
 /// the kernel hot path.
+use std::sync::Arc;
 use std::sync::OnceLock;
 use std::time::Duration;
 
+use tokio::sync::Semaphore;
+
 use kernelradar_core::alert::Alert;
+
+/// Cap on simultaneously-outstanding webhook POSTs. Prevents an
+/// alert flood combined with a slow / unreachable collector from
+/// accumulating an unbounded number of `tokio::spawn`-ed tasks
+/// (each holding a payload + URL + auth token clone) until the
+/// daemon OOMs. Drops past the cap are counted into a warn log.
+const MAX_INFLIGHT: usize = 100;
 
 #[derive(Debug, Clone)]
 pub struct WebhookConfig {
@@ -39,6 +49,7 @@ impl Default for WebhookConfig {
 
 static CONFIG: OnceLock<WebhookConfig> = OnceLock::new();
 static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
+static INFLIGHT: OnceLock<Arc<Semaphore>> = OnceLock::new();
 
 pub fn init(config: WebhookConfig) {
     if !config.enabled || config.url.is_empty() {
@@ -61,6 +72,7 @@ pub fn init(config: WebhookConfig) {
         .build()
         .expect("reqwest client");
     let _ = CLIENT.set(client);
+    let _ = INFLIGHT.set(Arc::new(Semaphore::new(MAX_INFLIGHT)));
     let _ = CONFIG.set(config);
 }
 
@@ -81,9 +93,31 @@ pub fn submit(alert: &Alert) {
         return;
     }
 
+    // Acquire an inflight permit before allocating the payload.
+    // If we are at MAX_INFLIGHT, drop the alert with a warn instead
+    // of letting the spawn queue grow without bound when the
+    // collector is slow or unreachable.
+    let permit = match INFLIGHT
+        .get()
+        .and_then(|s| s.clone().try_acquire_owned().ok())
+    {
+        Some(p) => p,
+        None => {
+            tracing::warn!(
+                cap = MAX_INFLIGHT,
+                "webhook: dropping alert, inflight cap reached \
+                 (collector slow / unreachable)"
+            );
+            return;
+        }
+    };
+
     let payload = match serde_json::to_string(alert) {
         Ok(s) => s,
-        Err(_) => return,
+        Err(_) => {
+            drop(permit);
+            return;
+        }
     };
     let url = cfg.url.clone();
     let auth = cfg.auth_token.clone();
@@ -110,6 +144,7 @@ pub fn submit(alert: &Alert) {
                                 "webhook: send failed");
             }
         }
+        drop(permit);
     });
 }
 
