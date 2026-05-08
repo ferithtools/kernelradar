@@ -190,6 +190,35 @@ impl Baseline {
                     "baseline: evicted stale pairs"
                 );
             }
+
+            // Hard fall-through: if the staleness pass evicted nothing
+            // (every entry younger than evict_age_hours, e.g. an
+            // attacker churning prctl(PR_SET_NAME) at high rate within
+            // the last hour), drop the oldest entries by `last_seen`
+            // until we are back under cap. Without this the
+            // pairs_max "cap" is a soft hint that an attacker can
+            // ignore, growing the HashMap until OOM.
+            if self.pairs.len() >= self.config.pairs_max {
+                // Only walk when we actually need to drop something.
+                // Sort by last_seen ascending; drop the oldest 10% in
+                // one pass so we are not back here on the next event.
+                let target_drop = (self.pairs.len() / 10).max(1).min(self.pairs.len());
+                let mut by_age: Vec<(String, chrono::DateTime<Utc>)> = self
+                    .pairs
+                    .iter()
+                    .filter_map(|(k, v)| v.last_seen.map(|t| (k.clone(), t)))
+                    .collect();
+                by_age.sort_by_key(|(_, t)| *t);
+                for (k, _) in by_age.into_iter().take(target_drop) {
+                    self.pairs.remove(&k);
+                    self.cur_minute.remove(&k);
+                }
+                tracing::warn!(
+                    cap = self.config.pairs_max,
+                    dropped = target_drop,
+                    "baseline: hostile churn detected, dropped oldest pairs by last_seen"
+                );
+            }
         }
 
         // ── Update minute window: roll over if minute changed ───────
