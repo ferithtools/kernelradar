@@ -251,20 +251,57 @@ fn emit_plain(alert: &Alert) {
     }
 }
 
-/// Replace every ASCII control character (except plain space) with
-/// `\xHH` notation so the result is safe to splat into a terminal.
-/// Avoids ANSI escape sequence smuggling via `comm` /
-/// path / title fields.
+/// Replace control characters and Unicode bidi/format/line-separator
+/// codepoints with their `\u{XXXX}` representation so the result is
+/// safe to splat into a terminal. Avoids ANSI escape sequence
+/// smuggling AND Unicode visual-spoofing tricks (RIGHT-TO-LEFT
+/// OVERRIDE U+202E to make `/etc/wodahs` look like `/etc/shadow`,
+/// LINE SEPARATOR U+2028 to fake a new log line in some terminals,
+/// zero-width joiners that hide content) via `comm` / path / title
+/// fields.
 fn sanitize_for_tty(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     for ch in s.chars() {
-        if ch == ' ' || !ch.is_control() {
+        if ch == ' ' || is_safe_for_tty(ch) {
             out.push(ch);
         } else {
-            out.push_str(&format!("\\x{:02x}", ch as u32));
+            let n = ch as u32;
+            if n <= 0xff {
+                out.push_str(&format!("\\x{n:02x}"));
+            } else {
+                out.push_str(&format!("\\u{{{n:04x}}}"));
+            }
         }
     }
     out
+}
+
+/// Whitelist for tty output. Rejects `char::is_control()` (Cc) and
+/// Unicode codepoints that have no visible width but DO change how
+/// the terminal renders the surrounding text:
+///
+/// - U+200B..U+200F  (zero-width space / non-joiner / joiner / LRM / RLM)
+/// - U+202A..U+202E  (LRE / RLE / PDF / LRO / RLO - bidi overrides)
+/// - U+2060..U+2064  (word joiner / invisible separators)
+/// - U+2066..U+2069  (LRI / RLI / FSI / PDI - bidi isolates)
+/// - U+2028..U+2029  (LINE SEPARATOR / PARAGRAPH SEPARATOR - Zl/Zp)
+/// - U+FEFF          (zero-width no-break space / BOM)
+/// - U+FFF9..U+FFFB  (interlinear annotation markers)
+fn is_safe_for_tty(ch: char) -> bool {
+    if ch.is_control() {
+        return false;
+    }
+    let n = ch as u32;
+    !matches!(
+        n,
+        0x200B..=0x200F  // zero-width + LRM/RLM
+            | 0x202A..=0x202E  // bidi overrides
+            | 0x2028..=0x2029  // line/paragraph separators
+            | 0x2060..=0x2064  // word joiner + invisible separators
+            | 0x2066..=0x2069  // bidi isolates
+            | 0xFEFF           // BOM / ZWNBSP
+            | 0xFFF9..=0xFFFB  // interlinear annotation
+    )
 }
 
 #[cfg(test)]
@@ -304,6 +341,43 @@ mod sanitize_tty_tests {
     fn keeps_unicode() {
         assert_eq!(s("привет"), "привет");
         assert_eq!(s("résumé"), "résumé");
+    }
+
+    #[test]
+    fn escapes_bidi_overrides() {
+        // U+202E RIGHT-TO-LEFT OVERRIDE - visual spoof tool
+        assert_eq!(s("a\u{202E}b"), "a\\u{202e}b");
+        // U+202A LEFT-TO-RIGHT EMBEDDING
+        assert_eq!(s("\u{202A}x\u{202C}"), "\\u{202a}x\\u{202c}");
+    }
+
+    #[test]
+    fn escapes_zero_width() {
+        // U+200B ZERO-WIDTH SPACE
+        assert_eq!(s("foo\u{200B}bar"), "foo\\u{200b}bar");
+        // U+FEFF BOM as zero-width no-break space
+        assert_eq!(s("\u{FEFF}foo"), "\\u{feff}foo");
+    }
+
+    #[test]
+    fn escapes_line_separator() {
+        // U+2028 LINE SEPARATOR can fake a new log line
+        assert_eq!(s("foo\u{2028}bar"), "foo\\u{2028}bar");
+        // U+2029 PARAGRAPH SEPARATOR
+        assert_eq!(s("foo\u{2029}bar"), "foo\\u{2029}bar");
+    }
+
+    #[test]
+    fn escapes_bidi_isolates() {
+        // U+2066 LEFT-TO-RIGHT ISOLATE
+        assert_eq!(s("\u{2066}fake\u{2069}"), "\\u{2066}fake\\u{2069}");
+    }
+
+    #[test]
+    fn keeps_legitimate_unicode_letters() {
+        // Make sure ordinary RTL scripts (Hebrew, Arabic) pass through.
+        assert_eq!(s("שלום"), "שלום");
+        assert_eq!(s("مرحبا"), "مرحبا");
     }
 }
 
