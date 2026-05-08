@@ -11,9 +11,9 @@ body:
         1. Vague ideas / open-ended discussions belong in
            [Discussions](https://github.com/ferithtools/kernelradar/discussions),
            not the issue tracker.
-        2. Check the [roadmap](../../README.md#roadmap-2026) and the
-           [backlog](../../k-radar_backlog.md) - your idea might already
-           be queued.
+        2. Check the [roadmap](../../README.md#roadmap) and existing
+           [issues](https://github.com/ferithtools/kernelradar/issues?q=is%3Aissue) -
+           your idea might already be queued or shipped.
 
   - type: textarea
     id: problem
