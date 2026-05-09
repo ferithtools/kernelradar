@@ -40,7 +40,7 @@ kernelradar_anomalies_total{detector="privesc"} 5
 
 # HELP kernelradar_build_info kernelradar build info (always 1)
 # TYPE kernelradar_build_info gauge
-kernelradar_build_info{version="0.1.3"} 1
+kernelradar_build_info{version="0.1.4"} 1
 ```
 
 ## Prometheus scrape config

@@ -21,6 +21,44 @@ use crate::webhook::submit as webhook_submit;
 
 static ALERT_ID: AtomicU64 = AtomicU64::new(1);
 
+/// Future that resolves when the daemon should stop: either SIGINT
+/// (Ctrl-C, interactive use) or SIGTERM (the default systemd
+/// `KillSignal=`). Detectors race this against their event-loop's
+/// readable signal so that graceful shutdown actually triggers
+/// regardless of which signal arrives.
+///
+/// Earlier versions awaited only `tokio::signal::ctrl_c()`, which is
+/// SIGINT-only. Under systemd, `systemctl stop kernelradar` therefore
+/// did NOT trigger graceful shutdown - the unit kept running until
+/// systemd's `TimeoutStopSec` (90 s by default) elapsed and SIGKILL
+/// arrived. SIGKILL bypasses Rust drop handlers, so the final
+/// `baseline.save()` was never called and up to one
+/// `save_interval_secs` (default 300 s) of in-memory baseline state
+/// was lost on every restart.
+pub(crate) async fn shutdown_signal() {
+    #[cfg(unix)]
+    {
+        use tokio::signal::unix::{signal, SignalKind};
+        let mut term = match signal(SignalKind::terminate()) {
+            Ok(s) => s,
+            Err(e) => {
+                tracing::warn!(error = %e,
+                    "shutdown_signal: cannot install SIGTERM handler; SIGINT only");
+                tokio::signal::ctrl_c().await.ok();
+                return;
+            }
+        };
+        tokio::select! {
+            _ = tokio::signal::ctrl_c() => {}
+            _ = term.recv() => {}
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        tokio::signal::ctrl_c().await.ok();
+    }
+}
+
 /// Return the daemon's host (init-namespace) tgid. `std::process::id()`
 /// returns the namespace-local pid, which is often `1` inside a
 /// container - BPF events carry the host tgid (read off `task_struct`),

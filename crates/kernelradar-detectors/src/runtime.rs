@@ -17,9 +17,9 @@ use aya::{maps::RingBuf, programs::TracePoint, Ebpf};
 use std::os::fd::AsRawFd;
 use std::path::Path;
 use tokio::io::unix::AsyncFd;
-use tokio::signal;
 
 use crate::integrity::verify as verify_bpf;
+use crate::util::shutdown_signal;
 use kernelradar_core::event::KrEvent;
 
 /// Builder + runner for a tracepoint-driven detector.
@@ -73,7 +73,7 @@ impl TracepointDetector {
     }
 
     /// Drain `events_map` (the per-CPU ring buffer) and dispatch every
-    /// payload to `handle` until SIGINT. The ring buffer's file descriptor
+    /// payload to `handle` until SIGINT or SIGTERM. The ring buffer's file descriptor
     /// is registered with tokio as readable-interest; events wake the task
     /// directly instead of being polled every 100 ms, so end-to-end
     /// latency is no longer bounded by the polling interval. Missed events
@@ -97,7 +97,7 @@ impl TracepointDetector {
 
         loop {
             tokio::select! {
-                _ = signal::ctrl_c() => break,
+                _ = shutdown_signal() => break,
                 ready = async_ring.readable_mut() => {
                     let mut guard = ready?;
                     let RawFdRing(ring) = guard.get_inner_mut();

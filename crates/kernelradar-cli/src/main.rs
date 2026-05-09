@@ -13,7 +13,10 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilte
 use kernelradar_core::config::Config;
 use kernelradar_detectors::{
     allowlist::SharedAllowlist,
-    baseline::{in_learning, reset_global as baseline_reset, snapshot as baseline_snapshot},
+    baseline::{
+        in_learning, reset_global as baseline_reset, save as baseline_save,
+        snapshot as baseline_snapshot,
+    },
     bpf_loader::BpfLoaderDetector,
     cidr::{parse_all as parse_cidrs, SharedCidrList},
     container::ContainerDetector,
@@ -459,11 +462,28 @@ async fn run_daemon(bpf_dir: &str, cli_allow: &str, config_path: &str, cfg: &Con
     // SIGHUP handler - re-load config and update allowlists + CIDRs
     spawn_sighup_handler(config_path.to_string(), shared, fallback, cidrs);
 
-    // Each detector listens for SIGINT internally and breaks its loop,
-    // so on Ctrl+C every join handle resolves nearly simultaneously.
-    // We wait for ALL of them - a previous "wait for any" implementation
-    // silently dropped the survivors when the first one finished.
+    // Each detector listens for SIGINT and SIGTERM internally and breaks
+    // its loop, so on either signal every join handle resolves nearly
+    // simultaneously. We wait for ALL of them - a previous "wait for any"
+    // implementation silently dropped the survivors when the first one
+    // finished.
     await_all_detectors(handles).await;
+
+    // Final baseline persistence. Without this, `systemctl stop kernelradar`
+    // (and any other graceful shutdown) loses up to one save_interval_secs
+    // (default 300 s) of in-memory baseline state - the periodic save
+    // task is gone the moment its tokio runtime drops, and the new
+    // daemon then loads stale data and "warms up" against patterns it
+    // already learned. Failures here are logged but not fatal: shutdown
+    // is already in progress and the next startup will at least have
+    // the last periodic save to fall back to.
+    if cfg.baseline.enabled {
+        match baseline_save() {
+            Ok(()) => tracing::info!("baseline: final save complete"),
+            Err(e) => tracing::warn!(error = %e, "baseline: final save failed"),
+        }
+    }
+
     tracing::info!("kernelradar daemon stopped");
     Ok(())
 }

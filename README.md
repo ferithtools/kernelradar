@@ -5,7 +5,7 @@
 
 [![License: GPL-2.0-only](https://img.shields.io/badge/License-GPL%20v2-blue.svg)](LICENSE)
 [![CI](https://github.com/ferithtools/kernelradar/actions/workflows/ci.yml/badge.svg)](https://github.com/ferithtools/kernelradar/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-v0.1.3-orange.svg)](#)
+[![Version](https://img.shields.io/badge/version-v0.1.4-orange.svg)](#)
 [![Linux only](https://img.shields.io/badge/platform-linux--6.1%2B-lightgrey.svg)](#)
 
 ---
@@ -128,7 +128,7 @@ Pick something else when:
 - You need **IPv6 outbound monitoring today**: kernelradar's
   network detector is IPv4-only in v0.1; targeted for v0.1.x.
 - You need a **mature, multi-year track record**: kernelradar is
-  v0.1.3. Pilot it before paging anyone.
+  v0.1.4. Pilot it before paging anyone.
 
 ---
 
@@ -164,22 +164,22 @@ Full methodology and a per-stage breakdown live in
 
 ```bash
 # 1. Pull the release tarball + its SHA-256.
-curl -fsSLO https://github.com/ferithtools/kernelradar/releases/download/v0.1.3/kernelradar-0.1.3-linux-x86_64.tar.gz
-curl -fsSLO https://github.com/ferithtools/kernelradar/releases/download/v0.1.3/kernelradar-0.1.3-linux-x86_64.tar.gz.sha256
+curl -fsSLO https://github.com/ferithtools/kernelradar/releases/download/v0.1.4/kernelradar-0.1.4-linux-x86_64.tar.gz
+curl -fsSLO https://github.com/ferithtools/kernelradar/releases/download/v0.1.4/kernelradar-0.1.4-linux-x86_64.tar.gz.sha256
 
 # 2. Verify against the published checksum, then cross-check
 #    against the in-repo pin (committed at release time, so a
 #    compromised release endpoint cannot serve a tampered SHA).
-sha256sum -c kernelradar-0.1.3-linux-x86_64.tar.gz.sha256 \
+sha256sum -c kernelradar-0.1.4-linux-x86_64.tar.gz.sha256 \
     || { echo "TAMPERED - do not install"; exit 1; }
 
-PIN=$(curl -fsSL https://raw.githubusercontent.com/ferithtools/kernelradar/v0.1.3/release-checksums/v0.1.3/kernelradar-0.1.3-linux-x86_64.tar.gz.sha256 | awk '{print $1}')
-PUB=$(awk '{print $1}' kernelradar-0.1.3-linux-x86_64.tar.gz.sha256)
+PIN=$(curl -fsSL https://raw.githubusercontent.com/ferithtools/kernelradar/v0.1.4/release-checksums/v0.1.4/kernelradar-0.1.4-linux-x86_64.tar.gz.sha256 | awk '{print $1}')
+PUB=$(awk '{print $1}' kernelradar-0.1.4-linux-x86_64.tar.gz.sha256)
 [ "$PIN" = "$PUB" ] || { echo "release-attached SHA does not match in-repo pin"; exit 1; }
 
 # 3. Extract + run the bundled installer.
-tar -xzf kernelradar-0.1.3-linux-x86_64.tar.gz
-cd kernelradar-0.1.3-linux-x86_64
+tar -xzf kernelradar-0.1.4-linux-x86_64.tar.gz
+cd kernelradar-0.1.4-linux-x86_64
 sha256sum -c SHA256SUMS                  # verify each shipped file
 ./install.sh                              # binary, BPF objects, systemd unit, default config
 sudo systemctl enable --now kernelradar

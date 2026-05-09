@@ -4,6 +4,45 @@ All notable changes to this project are documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.1.4] - 2026-05-09
+
+Graceful-shutdown release. Two related bugs in the shutdown path
+caused the daemon to lose adaptive-baseline state on every
+`systemctl stop kernelradar` and to ignore SIGTERM entirely until
+systemd's `TimeoutStopSec` (90 s default) fired SIGKILL. No API or
+configuration changes; the bundled `install.sh` is unchanged.
+
+### Fixed - shutdown path
+
+- **Detectors now break their event loop on SIGTERM as well as
+  SIGINT.** Earlier versions raced the ring buffer against
+  `tokio::signal::ctrl_c()` only, which is SIGINT-only. systemd
+  sends SIGTERM by default for `KillSignal=`, so `systemctl stop
+  kernelradar` did not trigger graceful shutdown - the unit kept
+  reading events until SIGKILL arrived 90 s later, bypassing every
+  drop handler. Added `util::shutdown_signal()` that races SIGINT
+  and SIGTERM; `runtime::TracepointDetector` and the `selfprotect`
+  monitor loop both use it.
+- **`baseline::save()` is now called on shutdown.** The
+  `baseline.rs` module documentation already promised "every
+  save_interval and at shutdown", but the shutdown half was never
+  implemented. Without it, up to one `save_interval_secs` (default
+  300 s) of in-memory state was lost on every restart, and the
+  next daemon then "warmed up" against patterns it had already
+  learned. The save lands after `await_all_detectors`; failures
+  are logged but not fatal because shutdown is in progress and the
+  prior periodic save is still on disk.
+
+### Notes for operators
+
+- After upgrading, `systemctl stop kernelradar` produces an
+  additional log line `baseline: final save complete` on the way
+  out. This is the new code path; absence of the line indicates
+  either the daemon was killed via SIGKILL (rare) or the save
+  failed (the warning will be in the journal).
+- The drift-train concern that motivated v0.1.3's silent under-
+  sampled bucket scoring is unaffected by this change.
+
 ## [0.1.3] - 2026-05-09
 
 False-positive reduction release. A first-time admin walkthrough on

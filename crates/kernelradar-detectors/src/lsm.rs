@@ -206,7 +206,7 @@ fn spawn_selfprotect_reader(ring: RingBuf<MapData>) {
             };
         loop {
             tokio::select! {
-                _ = tokio::signal::ctrl_c() => break,
+                _ = crate::util::shutdown_signal() => break,
                 ready = async_ring.readable_mut() => {
                     let mut guard = match ready {
                         Ok(g) => g,
