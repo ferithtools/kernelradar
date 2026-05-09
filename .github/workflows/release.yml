@@ -1,0 +1,92 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    name: Build + publish release tarball
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install BPF build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            clang llvm libbpf-dev linux-tools-common linux-tools-generic
+          BPFTOOL_BIN=$(find /usr/lib/linux-tools-* -name bpftool 2>/dev/null | head -1)
+          if [ -n "$BPFTOOL_BIN" ]; then
+            sudo ln -sf "$BPFTOOL_BIN" /usr/local/bin/bpftool
+          fi
+          clang --version
+          bpftool version || true
+
+      - name: Verify runner kernel exposes BTF
+        run: |
+          if [ ! -r /sys/kernel/btf/vmlinux ]; then
+            echo "::error::Runner kernel has no BTF; cannot build BPF objects"
+            exit 1
+          fi
+
+      - name: Build release tarball
+        run: make release-tarball
+
+      - name: Sanity-check artefacts
+        working-directory: dist
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          VER="${TAG#v}"
+          ARCH="$(uname -m)"
+          NAME="kernelradar-${VER}-linux-${ARCH}"
+
+          ls -la "${NAME}.tar.gz" "${NAME}.tar.gz.sha256"
+
+          # Verify the .sha256 file is dist/-prefix-free (the v0.1.1 bug).
+          if grep -q '/' "${NAME}.tar.gz.sha256"; then
+            echo "::error::sha256 file contains a path; should be bare filename"
+            exit 1
+          fi
+          sha256sum -c "${NAME}.tar.gz.sha256"
+
+          # Verify the binary inside the tarball is stripped.
+          tar -xzf "${NAME}.tar.gz" "${NAME}/bin/kernelradar"
+          file "${NAME}/bin/kernelradar"
+          if file "${NAME}/bin/kernelradar" | grep -q "not stripped"; then
+            echo "::error::release binary is not stripped"
+            exit 1
+          fi
+
+      - name: Create or update GitHub release with artefacts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          VER="${TAG#v}"
+          ARCH="$(uname -m)"
+          NAME="kernelradar-${VER}-linux-${ARCH}"
+          NOTES="See [CHANGELOG.md](https://github.com/${GITHUB_REPOSITORY}/blob/${TAG}/CHANGELOG.md#${VER//./}---$(date -u +%Y-%m-%d)) for details. Tarball is built reproducibly in CI from \`${GITHUB_SHA}\`."
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG exists; uploading artefacts (clobber)"
+            gh release upload "$TAG" \
+              "dist/${NAME}.tar.gz" \
+              "dist/${NAME}.tar.gz.sha256" \
+              --clobber
+          else
+            echo "Creating release $TAG"
+            gh release create "$TAG" \
+              --title "$TAG" \
+              --notes "$NOTES" \
+              "dist/${NAME}.tar.gz" \
+              "dist/${NAME}.tar.gz.sha256"
+          fi

@@ -18,7 +18,7 @@ body:
     attributes:
       label: kernelradar version
       description: Output of `kernelradar --version` (it carries the git SHA).
-      placeholder: "kernelradar 0.1.1 (abc123def456, built 2026-05-08)"
+      placeholder: "kernelradar 0.1.2 (abc123def456, built 2026-05-09)"
     validations:
       required: true
 

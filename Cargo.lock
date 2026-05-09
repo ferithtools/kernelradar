@@ -704,7 +704,7 @@ dependencies = [
 
 [[package]]
 name = "kernelradar"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "aya",
@@ -722,7 +722,7 @@ dependencies = [
 
 [[package]]
 name = "kernelradar-core"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "chrono",
  "regex",
@@ -735,7 +735,7 @@ dependencies = [
 
 [[package]]
 name = "kernelradar-detectors"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "aya",

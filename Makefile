@@ -121,7 +121,7 @@ release-tarball: all
 	@cp $(BPF_DIR)/.output/*.bpf.o                      $(RELEASE_DIR)/lib/kernelradar/bpf/
 	@cp contrib/systemd/kernelradar.service             $(RELEASE_DIR)/share/systemd/
 	@$(BIN) config-cmd example                        > $(RELEASE_DIR)/share/kernelradar/config.toml.example
-	@cp LICENSE README.md                               $(RELEASE_DIR)/
+	@cp LICENSE README.md CHANGELOG.md                  $(RELEASE_DIR)/
 	@printf '%s\n' \
 	  "#!/usr/bin/env bash" \
 	  "# kernelradar $(RELEASE_VERSION) installer" \
@@ -139,10 +139,15 @@ release-tarball: all
 	  "echo 'Installed. Enable + start:'" \
 	  "echo '  sudo systemctl enable --now kernelradar'" \
 	  > $(RELEASE_DIR)/install.sh
-	@chmod +x $(RELEASE_DIR)/install.sh
+	@chmod 0755 $(RELEASE_DIR)/bin/kernelradar $(RELEASE_DIR)/install.sh
+	@find $(RELEASE_DIR) -type f \
+	    ! -path '$(RELEASE_DIR)/bin/*' \
+	    ! -name install.sh \
+	    -exec chmod 0644 {} +
 	@( cd $(RELEASE_DIR) && find . -type f ! -name SHA256SUMS \
 	      | LC_ALL=C sort | xargs sha256sum > SHA256SUMS )
+	@chmod 0644 $(RELEASE_DIR)/SHA256SUMS
 	@( cd dist && tar -czf $(RELEASE_NAME).tar.gz $(RELEASE_NAME) )
-	@sha256sum dist/$(RELEASE_NAME).tar.gz | tee dist/$(RELEASE_NAME).tar.gz.sha256
+	@( cd dist && sha256sum $(RELEASE_NAME).tar.gz | tee $(RELEASE_NAME).tar.gz.sha256 )
 	@echo "==> dist/$(RELEASE_NAME).tar.gz ready"
 	@ls -la dist/$(RELEASE_NAME).tar.gz

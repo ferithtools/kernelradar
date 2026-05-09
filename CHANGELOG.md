@@ -4,6 +4,42 @@ All notable changes to this project are documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.1.2] - 2026-05-09
+
+Packaging-only patch on top of v0.1.1. **No source changes** to the
+Rust crates or the BPF programs; the binary is byte-for-byte
+re-built from the same tree, so the alert pipeline, configuration
+schema, and on-wire output are identical to v0.1.1. v0.1.1
+supersedes -> v0.1.2 because three packaging issues surfaced during
+a fresh-admin walkthrough:
+
+### Fixed - release tarball
+
+- **Outer `.sha256` no longer carries the maintainer's `dist/`
+  path.** `sha256sum -c kernelradar-0.1.2-linux-x86_64.tar.gz.sha256`
+  now works out of the box. The old form (`<hash>  dist/<name>`)
+  forced the verifier to either edit the file or compute the hash
+  by hand.
+- **File modes inside the tarball are now `0644` for data and
+  `0755` only for the binary and `install.sh`.** v0.1.1 was packed
+  on a Windows-mounted filesystem in WSL; everything inherited
+  `0755`, including `LICENSE`, `README.md`, the `.bpf.o` files, the
+  `.service` unit, and `config.toml.example`. The Makefile now
+  `chmod`s explicitly before `tar`, so the modes are correct
+  regardless of the build host's filesystem.
+- **`CHANGELOG.md` is shipped inside the tarball.** Operators no
+  longer have to clone the repo or open the GitHub release page to
+  see what changed between versions.
+
+### Changed - release binary
+
+- `Cargo.toml`'s `[profile.release]` now uses `strip = "symbols"`
+  instead of `strip = "debuginfo"`. The release binary drops from
+  ~12 MB to ~5 MB. Trade-off: native crash backtraces lose
+  function names. The `--version` output still carries the build
+  git SHA, so a debug-friendly binary can be reproduced from
+  source for an exact build.
+
 ## [0.1.1] - 2026-05-08
 
 Security hardening release on top of v0.1.0. No new features, no
