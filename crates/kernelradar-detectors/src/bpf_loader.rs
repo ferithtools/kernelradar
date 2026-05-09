@@ -8,7 +8,7 @@ use anyhow::Result;
 
 use crate::allowlist::SharedAllowlist;
 use crate::runtime::TracepointDetector;
-use crate::util::{comm_str, make_alert, print_alert, read_exe_path_verified};
+use crate::util::{comm_str, host_tgid, make_alert, print_alert, read_exe_path_verified};
 use kernelradar_core::event::KrEvent;
 
 const PROG_TYPES: &[&str] = &[
@@ -54,6 +54,11 @@ fn prog_type_name(t: u32) -> &'static str {
 pub struct BpfLoaderDetector {
     bpf_obj_path: String,
     allowlist: SharedAllowlist,
+    /// Daemon's own host tgid. `BPF_PROG_LOAD` calls from the daemon's
+    /// async-runtime workers carry tgid == self.self_tgid (and a comm
+    /// like `tokio-rt-worker` that does not match the regular
+    /// allowlist). Suppress them so the daemon does not flag itself.
+    self_tgid: u32,
 }
 
 impl BpfLoaderDetector {
@@ -61,6 +66,7 @@ impl BpfLoaderDetector {
         Self {
             bpf_obj_path: bpf_obj_path.to_string(),
             allowlist,
+            self_tgid: host_tgid(),
         }
     }
 
@@ -78,6 +84,16 @@ impl BpfLoaderDetector {
     }
 
     fn handle(&self, ev: &KrEvent) {
+        // Drop the daemon's own BPF_PROG_LOAD calls. `ev.pid` carries
+        // the host tgid (set in BPF as `bpf_get_current_pid_tgid() >> 32`),
+        // so it matches whether the daemon is in a pid namespace or
+        // not. Without this filter the daemon's startup load (run on
+        // a tokio worker thread, comm = `tokio-rt-worker`) bypasses
+        // the comm-keyed allowlist and produces a self-detection alert.
+        if ev.pid == self.self_tgid {
+            return;
+        }
+
         let comm = comm_str(ev);
         let exe = read_exe_path_verified(ev.pid, &comm);
         let al = self.allowlist.snapshot();

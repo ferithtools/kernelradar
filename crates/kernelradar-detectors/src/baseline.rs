@@ -252,17 +252,19 @@ impl Baseline {
         // Otherwise an attacker can race the warm-up window: appear
         // for the first time while `learning_secs` is still in effect,
         // get free `observe()` calls without scoring, then look
-        // "normal" the moment scoring kicks in. Requiring a minimum
-        // sample count breaks that ramp - the first events after
-        // warm-up score against a "no prior data" branch instead of
-        // against the attacker's own warm-up trace.
+        // "normal" the moment scoring kicks in.
+        //
+        // Earlier versions emitted `Some(observed / 0.5)` here, which
+        // is a linear ramp in the observation count rather than a
+        // real z-score: 2 events -> "z=4σ", 3 -> "6σ", 4 -> "8σ".
+        // After a daemon restart this looked like an escalating
+        // attack on rare detectors (bpf-loader, kmod) whose hour
+        // bucket was simply under-sampled. Now we observe silently
+        // until the bucket reaches `min_samples_for_scoring`. The
+        // residual drift-train concern is partially covered by the
+        // rate-limiter and burst detectors which do not depend on
+        // the per-hour bucket.
         if bucket.samples < self.config.min_samples_for_scoring {
-            // No (or too little) prior data for this hour. Score as
-            // "new pattern": observed compared against mean=0, σ=floor.
-            let z = observed / 0.5;
-            if z >= self.config.score_threshold {
-                return Some(z);
-            }
             return None;
         }
         let z = bucket.z_score(observed);

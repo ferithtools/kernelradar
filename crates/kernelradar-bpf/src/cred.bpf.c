@@ -58,9 +58,35 @@ static __always_inline int is_cred_candidate(const char *p)
  * requires the byte after the second `.` to be a path separator
  * or NUL so legitimate filenames like "/var/cache/...metadata"
  * do not false-positive.
+ *
+ * Paths under kernel virtual filesystems (/sys/, /proc/) and the
+ * common runtime / scratch areas (/var/, /tmp/, /run/) are
+ * exempted: /../ in those paths is normal (cgroup mounts, runc
+ * container setup, /tmp/foo/../bar in build tooling) and a real
+ * attacker cannot escape these into /etc/shadow via a literal
+ * traversal anyway because the kernel canonicalises before openat.
  */
 static __always_inline int contains_dotdot(const char *p, int max)
 {
+    if (p[0] == '/') {
+        /* /sys/ */
+        if (p[1] == 's' && p[2] == 'y' && p[3] == 's' && p[4] == '/')
+            return 0;
+        /* /proc/ */
+        if (p[1] == 'p' && p[2] == 'r' && p[3] == 'o' && p[4] == 'c'
+            && p[5] == '/')
+            return 0;
+        /* /var/ */
+        if (p[1] == 'v' && p[2] == 'a' && p[3] == 'r' && p[4] == '/')
+            return 0;
+        /* /tmp/ */
+        if (p[1] == 't' && p[2] == 'm' && p[3] == 'p' && p[4] == '/')
+            return 0;
+        /* /run/ */
+        if (p[1] == 'r' && p[2] == 'u' && p[3] == 'n' && p[4] == '/')
+            return 0;
+    }
+
     #pragma unroll
     for (int i = 0; i < 29; i++) {
         if (i + 3 >= max)

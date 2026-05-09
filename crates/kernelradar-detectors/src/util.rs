@@ -21,6 +21,52 @@ use crate::webhook::submit as webhook_submit;
 
 static ALERT_ID: AtomicU64 = AtomicU64::new(1);
 
+/// Return the daemon's host (init-namespace) tgid. `std::process::id()`
+/// returns the namespace-local pid, which is often `1` inside a
+/// container - BPF events carry the host tgid (read off `task_struct`),
+/// so the two would never match and any "is this event from us?"
+/// filter that compared them would silently fail.
+///
+/// `/proc/self/status` carries an `NSpid:` line listing the pid in
+/// every namespace, leftmost first (host) and rightmost last
+/// (innermost namespace). When unsupported (kernels < 4.1) the field
+/// is absent and we fall back to `std::process::id()` with a warning.
+pub(crate) fn host_tgid() -> u32 {
+    let status = match std::fs::read_to_string("/proc/self/status") {
+        Ok(s) => s,
+        Err(e) => {
+            tracing::warn!(error = %e,
+                "host_tgid: cannot read /proc/self/status, using std::process::id()");
+            return std::process::id();
+        }
+    };
+    for line in status.lines() {
+        if let Some(rest) = line.strip_prefix("NSpid:") {
+            // Tab-separated list of numeric pids, leftmost is host.
+            if let Some(first) = rest.split_whitespace().next() {
+                if let Ok(n) = first.parse::<u32>() {
+                    let local = std::process::id();
+                    if n != local {
+                        tracing::warn!(
+                            host_tgid = n,
+                            local_pid = local,
+                            "host_tgid: daemon is in a non-root pid namespace; \
+                             using host tgid for self-event filtering"
+                        );
+                    }
+                    return n;
+                }
+            }
+        }
+    }
+    tracing::warn!(
+        "host_tgid: /proc/self/status has no NSpid: field, \
+         falling back to std::process::id() - self-event filtering may \
+         be a no-op if the daemon is pid-namespaced"
+    );
+    std::process::id()
+}
+
 /// Read the executable path of a process from /proc/<pid>/exe.
 ///
 /// Plain version, no consistency check. Prefer

@@ -136,8 +136,11 @@ release-tarball: all
 	  "sudo install -d /etc/kernelradar" \
 	  "[ -e /etc/kernelradar/config.toml ] || sudo cp \"\$$HERE/share/kernelradar/config.toml.example\" /etc/kernelradar/config.toml" \
 	  "sudo systemctl daemon-reload" \
-	  "echo 'Installed. Enable + start:'" \
-	  "echo '  sudo systemctl enable --now kernelradar'" \
+	  "echo" \
+	  "echo 'Installed. Next steps:'" \
+	  "echo '  1) sudo systemctl enable --now kernelradar'" \
+	  "echo '  2) sudo journalctl -u kernelradar -f -o cat   # watch alerts'" \
+	  "echo '  3) sudo kernelradar config-cmd validate       # if you edit /etc/kernelradar/config.toml'" \
 	  > $(RELEASE_DIR)/install.sh
 	@chmod 0755 $(RELEASE_DIR)/bin/kernelradar $(RELEASE_DIR)/install.sh
 	@find $(RELEASE_DIR) -type f \

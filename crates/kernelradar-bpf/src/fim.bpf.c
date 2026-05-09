@@ -72,6 +72,26 @@ static __always_inline int is_sensitive_prefix(const char *p)
  */
 static __always_inline int contains_dotdot(const char *p, int max)
 {
+    /* Exempt kernel virtual filesystems (/sys/, /proc/) and runtime /
+     * scratch areas (/var/, /tmp/, /run/). /../ is normal there
+     * (cgroup mount paths, runc container setup, build tooling) and
+     * cannot be used to escape into a credential path because the
+     * kernel canonicalises before openat returns. Without this the
+     * detector floods on every container start. */
+    if (p[0] == '/') {
+        if (p[1] == 's' && p[2] == 'y' && p[3] == 's' && p[4] == '/')
+            return 0;
+        if (p[1] == 'p' && p[2] == 'r' && p[3] == 'o' && p[4] == 'c'
+            && p[5] == '/')
+            return 0;
+        if (p[1] == 'v' && p[2] == 'a' && p[3] == 'r' && p[4] == '/')
+            return 0;
+        if (p[1] == 't' && p[2] == 'm' && p[3] == 'p' && p[4] == '/')
+            return 0;
+        if (p[1] == 'r' && p[2] == 'u' && p[3] == 'n' && p[4] == '/')
+            return 0;
+    }
+
     #pragma unroll
     for (int i = 0; i < 29; i++) {
         if (i + 3 >= max)

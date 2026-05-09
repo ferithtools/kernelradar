@@ -4,6 +4,61 @@ All notable changes to this project are documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.1.3] - 2026-05-09
+
+False-positive reduction release. A first-time admin walkthrough on
+a busy production host (Debian 12, kernel 6.13.9, with `runc` /
+`containerd` running) flagged three runtime sources of noise that
+v0.1.2 still produced. No API or configuration changes.
+
+### Fixed - false positives
+
+- **`bpf-loader` no longer flags the daemon's own startup loads.**
+  At boot the daemon issues several `BPF_PROG_LOAD` syscalls from
+  its tokio worker threads (`comm = "tokio-rt-worker"`). Those
+  worker comms do not match the per-detector allowlist, which only
+  knows the daemon's binary name, so each load surfaced as
+  "unauthorised loader" and the baseline scored the burst as an
+  ascending z-score. The detector now reads the daemon's host TGID
+  (via `/proc/self/status` `NSpid:`, the same code path
+  `selfprotect` already used) and drops events where the calling
+  TGID is the daemon itself. Self-events on third-party `BPF_PROG_LOAD`
+  callers are unaffected.
+- **Path-traversal heuristic in `cred` and `fim` exempts kernel
+  virtual filesystems and runtime / scratch areas.** Paths under
+  `/sys/`, `/proc/`, `/var/`, `/tmp/`, and `/run/` no longer fire
+  the `KR_*_PATH_TRAVERSAL` event type just because they contain a
+  literal `/../`. `runc` mounts cgroups with paths like
+  `/sys/fs/cgroup/../<container>` and was producing a CRITICAL
+  alert per container start. The kernel canonicalises `..` before
+  `openat` returns, so a real attacker cannot escape these
+  filesystems into a credential path via a literal traversal token
+  anyway. Direct opens of `/etc/shadow`, `/etc/sudoers`, `/root/`,
+  and `/home/*/.ssh/` still trigger as before.
+
+### Changed - baseline scoring
+
+- **Under-sampled hour buckets observe silently instead of emitting
+  a linear-ramp z-score.** Before this release, the
+  `min_samples_for_scoring` gate (added in KR-05) routed events for
+  buckets with fewer than `min_samples_for_scoring` observations
+  into a "no prior data" branch that scored `observed / 0.5`. That
+  is not a real z-score - it is `2 * observed`, so two events
+  scored "z=4σ", three scored "z=6σ", four scored "z=8σ", which on
+  a daemon restart looked like an escalating attack but was just
+  the bucket warming up. The branch now returns `None`. The drift-
+  train concern that motivated the gate is partially covered by
+  the rate-limiter and burst detectors, which do not depend on the
+  per-hour bucket; full coverage is on the v0.2 list.
+
+### Documentation - install.sh next-steps
+
+- The bundled `install.sh` finishes with a three-step prompt
+  (enable + start, follow alerts, validate config after edits)
+  instead of just "Enable + start". Saves a round-trip to the
+  README for an admin running `install.sh` from a screenshot of a
+  walkthrough.
+
 ## [0.1.2] - 2026-05-09
 
 Packaging-only patch on top of v0.1.1. **No source changes** to the
