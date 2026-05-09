@@ -173,7 +173,7 @@ curl -fsSLO https://github.com/ferithtools/kernelradar/releases/download/v0.1.4/
 sha256sum -c kernelradar-0.1.4-linux-x86_64.tar.gz.sha256 \
     || { echo "TAMPERED - do not install"; exit 1; }
 
-PIN=$(curl -fsSL https://raw.githubusercontent.com/ferithtools/kernelradar/v0.1.4/release-checksums/v0.1.4/kernelradar-0.1.4-linux-x86_64.tar.gz.sha256 | awk '{print $1}')
+PIN=$(curl -fsSL https://raw.githubusercontent.com/ferithtools/kernelradar/master/release-checksums/v0.1.4/kernelradar-0.1.4-linux-x86_64.tar.gz.sha256 | awk '{print $1}')
 PUB=$(awk '{print $1}' kernelradar-0.1.4-linux-x86_64.tar.gz.sha256)
 [ "$PIN" = "$PUB" ] || { echo "release-attached SHA does not match in-repo pin"; exit 1; }
 
